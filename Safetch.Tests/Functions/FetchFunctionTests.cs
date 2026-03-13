@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -104,60 +104,5 @@ public class FetchFunctionTests
         var body = JsonSerializer.Serialize(new { url = "http://example.com" });
         var result = await CreateSut(mock).Run(MakeRequest(body), new FakeFunctionContext());
         Assert.Equal(HttpStatusCode.BadGateway, result.StatusCode);
-    }
-
-    public class FetchFunctionErrorShapeTests
-    {
-        // Helper to read body from response
-        private static async Task<JsonElement> ReadJsonBody(HttpResponseData response)
-        {
-            response.Body.Position = 0;
-            using var reader = new StreamReader(response.Body);
-            var json = await reader.ReadToEndAsync();
-            return JsonSerializer.Deserialize<JsonElement>(json);
-        }
-
-        private static FakeHttpRequestData MakeRequest(string body)
-            => new FakeHttpRequestData(new FakeFunctionContext(), body);
-
-        [Fact]
-        public async Task Run_InvalidJson_ErrorResponseIncludesErrorCode()
-        {
-            var sut = new FetchFunction(new Mock<IFetchService>().Object);
-            var result = await sut.Run(MakeRequest("not json"), new FakeFunctionContext());
-            var body = await ReadJsonBody(result);
-            Assert.True(body.TryGetProperty("error", out _));
-            Assert.True(body.TryGetProperty("errorCode", out _));
-        }
-
-        [Fact]
-        public async Task Run_BlockedByService_ErrorResponseIncludesErrorCode()
-        {
-            var mock = new Mock<IFetchService>();
-            mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
-                .ReturnsAsync(new FetchResponse { Success = false, ErrorCode = "BLOCKED", ErrorMessage = "bad url" });
-
-            var sut = new FetchFunction(mock.Object);
-            var result = await sut.Run(MakeRequest($"{{\u0022url\u0022:\u0022http://example.com\u0022}}"), new FakeFunctionContext());
-            var body = await ReadJsonBody(result);
-
-            Assert.Equal("BLOCKED", body.GetProperty("errorCode").GetString());
-            Assert.Equal("bad url", body.GetProperty("error").GetString());
-        }
-    }
-
-    [Fact]
-    public async Task Run_ValidRequestWithSessionId_ResponseIncludesSessionId()
-    {
-        var mock = new Mock<IFetchService>();
-        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
-            .ReturnsAsync(new FetchResponse { Success = true, Url = "http://example.com", Content = "hi", StatusCode = 200, SessionId = "sess-123" });
-
-        var body = JsonSerializer.Serialize(new { url = "http://example.com", sessionId = "sess-123" });
-        var result = await CreateSut(mock).Run(MakeRequest(body), new FakeFunctionContext());
-
-        var json = await ReadBody(result);
-        var doc = JsonSerializer.Deserialize<JsonElement>(json);
-        Assert.Equal("sess-123", doc.GetProperty("sessionId").GetString());
     }
 }

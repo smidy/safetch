@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,6 +17,7 @@ public class ContentProcessorPipeline
     public async Task<ProcessorResult> RunAsync(string content, ProcessingContext ctx, CancellationToken ct)
     {
         var warnings = new List<string>();
+        var injectionWarnings = new List<InjectionWarning>();
         var currentContent = content;
 
         // Sort by Order
@@ -31,8 +32,9 @@ public class ContentProcessorPipeline
             var result = await ordered.Processor.ProcessAsync(currentContent, ctx, ct);
             currentContent = result.Content;
             warnings.AddRange(result.Warnings);
+            injectionWarnings.AddRange(result.InjectionWarnings);
         }
 
-        return new ProcessorResult(currentContent, warnings);
+        return new ProcessorResult(currentContent, warnings, injectionWarnings);
     }
 }

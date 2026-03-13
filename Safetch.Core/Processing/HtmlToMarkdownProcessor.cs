@@ -1,4 +1,4 @@
-namespace Safetch.Core.Processing;
+﻿namespace Safetch.Core.Processing;
 
 public class HtmlToMarkdownProcessor : IContentProcessor
 {
@@ -10,10 +10,10 @@ public class HtmlToMarkdownProcessor : IContentProcessor
         {
             UnknownTags = ReverseMarkdown.Config.UnknownTagsOption.Bypass,
             RemoveComments = true,
-            SmartHrefHandling = true
+            SmartHrefHandling = true,
         };
         var converter = new ReverseMarkdown.Converter(config);
         var markdown = converter.Convert(content);
-        return Task.FromResult(new ProcessorResult(markdown, new List<string>()));
+        return Task.FromResult(new ProcessorResult(markdown, new List<string>(), new List<InjectionWarning>()));
     }
 }

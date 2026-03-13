@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,11 +26,11 @@ public class ReadableContentProcessor : IContentProcessor
             warnings.Add("Readable extraction failed — returning sanitised HTML");
             // Fallback: do basic tag strip for text mode, or return as-is
             var fallback = wantText ? StripTags(content) : content;
-            return Task.FromResult(new ProcessorResult(fallback, warnings));
+            return Task.FromResult(new ProcessorResult(fallback, warnings, new List<InjectionWarning>()));
         }
 
         var extracted = wantText ? StripTags(article.Content) : article.Content;
-        return Task.FromResult(new ProcessorResult(extracted, warnings));
+        return Task.FromResult(new ProcessorResult(extracted, warnings, new List<InjectionWarning>()));
     }
 
     private static string StripTags(string html)

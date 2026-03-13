@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using System.Text.Json.Serialization;
+using Safetch.Core.Processing;
 
 namespace Safetch.Core.Models;
 
@@ -7,8 +7,6 @@ public class FetchResponse
 {
     public bool Success { get; init; } = true;
     public string Url { get; init; } = string.Empty;
-    [JsonPropertyName("sessionId")]
-    public string? SessionId { get; init; }
     public string Content { get; init; } = string.Empty;
     public int StatusCode { get; init; }
     public string? ContentType { get; init; }
@@ -16,4 +14,5 @@ public class FetchResponse
     public string? ErrorCode { get; init; }    // "BLOCKED", "FETCH_FAILED", etc.
     public string? ErrorMessage { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = System.Array.Empty<string>();
+    public IReadOnlyList<InjectionWarning> InjectionWarnings { get; init; } = System.Array.Empty<InjectionWarning>();
 }

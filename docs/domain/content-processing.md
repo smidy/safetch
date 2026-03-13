@@ -18,7 +18,15 @@ The pipeline is composable and ordered. Each processor:
 record ProcessingContext(string MimeType, string SourceUrl);
 // MimeType is the parsed MIME type only — e.g. "text/html", never "text/html; charset=utf-8"
 
-record ProcessorResult(string Content, IReadOnlyList<string> Warnings);
+record ProcessorResult(
+    string Content,
+    IReadOnlyList<string> Warnings,                    // backward-compat flat strings
+    IReadOnlyList<InjectionWarning> InjectionWarnings  // structured, per-match
+);
+
+public enum InjectionSeverity { Informational, Medium, High }
+
+record InjectionWarning(string Category, string PatternMatched, InjectionSeverity Severity);
 
 record OrderedProcessor(int Order, string ContentTypeAffinity, IContentProcessor Processor);
 ```
@@ -64,9 +72,26 @@ Detected patterns: `opacity:0`, `display:none`, `visibility:hidden`, `color:whit
 
 Detection-only by design. Removal is easily bypassed by split-word attacks and can corrupt legitimate content. Callers receive warnings and decide how to handle them. The pattern list is a best-effort baseline — not a complete defence.
 
+`InjectionPatternProcessor` emits one `InjectionWarning` per pattern match, covering 8 categories:
+
+| Category | Severity | Description |
+|---|---|---|
+| `InstructionOverride` | Medium | Classic "ignore previous instructions" phrasing |
+| `PersonaHijacking` | Medium | "act as", "you are now", "new persona" |
+| `ModelFormatMarker` | Informational | Tokenizer markers from open-source models (`[INST]`, `<|im_start|>`, etc.) |
+| `DataExfiltration` | High | Phrases directing data to an attacker URL |
+| `ToolCallCoercion` | High | Phrases instructing the agent to invoke tools directly |
+| `AuthorityOverride` | High | False system-level authority assertions |
+| `MemoryPoisoning` | High | Phrases designed to write persistent instructions into AI memory (MITRE AML.T0080.000) |
+| `JailbreakFraming` | Medium | Well-known jailbreak triggers (DAN, god mode, developer mode, etc.) |
+
+Structured warnings are surfaced via `FetchResponse.InjectionWarnings` (`IReadOnlyList<InjectionWarning>`). The flat `FetchResponse.Warnings` string list is also populated for backward compatibility.
+
+**Arms-race limitation**: Static pattern matching raises the bar but cannot close the gap against adaptive or encoded attacks. Treat warnings as signals to scrutinise, not proof of safety when absent.
+
 ## Warnings contract
 
-`FetchResponse.Warnings` accumulates all warnings from all processors. It is always present in the response as an array — never omitted, even when empty (`[]`). Callers (e.g. `WebFetchTool`) should log or surface warnings for scrutiny.
+`FetchResponse.Warnings` accumulates all warnings from all processors as flat strings. It is always present in the response as an array — never omitted, even when empty (`[]`). `FetchResponse.InjectionWarnings` carries the structured injection warnings separately. Callers (e.g. `WebFetchTool`) should log or surface both for scrutiny.
 
 ## Unicode Tag surrogate encoding
 

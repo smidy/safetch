@@ -40,7 +40,6 @@ public class FetchService : IFetchService
                 return new FetchResponse
                 {
                     Success = false,
-                    SessionId = request.SessionId,
                     ErrorCode = "BLOCKED",
                     ErrorMessage = result.Reason
                 };
@@ -60,7 +59,6 @@ public class FetchService : IFetchService
             return new FetchResponse
             {
                 Success = false,
-                SessionId = request.SessionId,
                 ErrorCode = "FETCH_FAILED",
                 ErrorMessage = "An unexpected error occurred while fetching the URL."
             };
@@ -70,7 +68,6 @@ public class FetchService : IFetchService
             return new FetchResponse
             {
                 Success = false,
-                SessionId = request.SessionId,
                 ErrorCode = "FETCH_FAILED",
                 ErrorMessage = fetched.ErrorMessage
             };
@@ -109,13 +106,13 @@ public class FetchService : IFetchService
         return new FetchResponse
         {
             Success = true,
-            SessionId = request.SessionId,
             Url = request.Url!,
             Content = processorResult.Content,
             StatusCode = fetched.StatusCode ?? 0,
             ContentType = fetched.ContentType,
             ContentBytes = processorResult.Content.Length,
-            Warnings = processorResult.Warnings
+            Warnings = processorResult.Warnings,
+            InjectionWarnings = processorResult.InjectionWarnings
         };
     }
 }

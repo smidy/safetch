@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -68,7 +68,7 @@ public class HtmlSanitizerProcessor : IContentProcessor
         }
 
         var resultHtml = doc.DocumentNode.OuterHtml;
-        return Task.FromResult(new ProcessorResult(resultHtml, new List<string>()));
+        return Task.FromResult(new ProcessorResult(resultHtml, new List<string>(), new List<InjectionWarning>()));
     }
 
     private static string NormalizeStyle(string style)

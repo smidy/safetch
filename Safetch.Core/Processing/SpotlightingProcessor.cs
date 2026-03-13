@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,6 +14,6 @@ public class SpotlightingProcessor : IContentProcessor
     public Task<ProcessorResult> ProcessAsync(string content, ProcessingContext ctx, CancellationToken ct)
     {
         var output = $"{Header}\n\n{content}\n\n{Footer}";
-        return Task.FromResult(new ProcessorResult(output, new List<string>()));
+        return Task.FromResult(new ProcessorResult(output, new List<string>(), new List<InjectionWarning>()));
     }
 }

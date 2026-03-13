@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,7 +17,7 @@ public class UnicodeTagStripProcessor : IContentProcessor
         var matches = TagsBlock.Matches(content);
         if (matches.Count == 0)
         {
-            return Task.FromResult(new ProcessorResult(content, new List<string>()));
+            return Task.FromResult(new ProcessorResult(content, new List<string>(), new List<InjectionWarning>()));
         }
 
         var stripped = TagsBlock.Replace(content, "");
@@ -25,6 +25,6 @@ public class UnicodeTagStripProcessor : IContentProcessor
         {
             "Unicode Tag characters (U+E0000–U+E007F) were removed from content."
         };
-        return Task.FromResult(new ProcessorResult(stripped, warnings));
+        return Task.FromResult(new ProcessorResult(stripped, warnings, new List<InjectionWarning>()));
     }
 }
