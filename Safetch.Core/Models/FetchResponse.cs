@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
-using Safetch.Core.Processing;
+﻿using Safetch.Core.Processing;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Safetch.Core.Models;
 
@@ -7,6 +8,8 @@ public class FetchResponse
 {
     public bool Success { get; init; } = true;
     public string Url { get; init; } = string.Empty;
+    [JsonPropertyName("sessionId")]
+    public string? SessionId { get; init; }
     public string Content { get; init; } = string.Empty;
     public int StatusCode { get; init; }
     public string? ContentType { get; init; }
