@@ -1,4 +1,4 @@
-# Safetch
+﻿# Safetch
 
 A self-hosted, security-hardened web fetch proxy for AI agents.
 
@@ -9,7 +9,7 @@ Safetch is a minimal, auditable, and secure HTTP fetch service designed for AI a
 ## Why Safetch
 
 - **SSRF protection**: DNS pinning, redirect validation, and strict URL scheme/host allowlisting
-- **Content sanitisation pipeline**: HTML sanitisation, Unicode Tag stripping, injection detection, and spotlighting of suspicious patterns
+- **Content sanitisation pipeline**: HTML sanitisation, Unicode Tag stripping, categorised injection detection, and spotlighting of suspicious patterns
 - **Readable content extraction**: Mozilla Readability integration for clean article body extraction
 - **LLM-ready output**: Markdown conversion of readable content — ideal for prompt context
 - **Per-session rate limiting**: Prevent abuse without requiring global auth state
@@ -71,7 +71,8 @@ curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
   "content": "# Example Domain\n...",
   "statusCode": 200,
   "sessionId": "abc123",
-  "warnings": []
+  "warnings": [],
+  "injectionWarnings": []
 }
 ```
 
@@ -101,6 +102,39 @@ curl -X POST http://localhost:7071/api/fetch \
 | `readable` | Article body extracted via Mozilla Readability |
 | `text` | Readable extraction, HTML tags stripped — plain text |
 | `markdown` | Readable extraction converted to Markdown — best for LLM consumption |
+
+### Injection warnings
+
+When the content processor detects a potential prompt-injection pattern, the response includes structured `injectionWarnings` — each warning carries a `category`, `severity`, and the matched `patternMatched` string.
+
+```json
+{
+  "injectionWarnings": [
+    {
+      "category": "MemoryPoisoning",
+      "severity": "High",
+      "patternMatched": "in future conversations"
+    }
+  ]
+}
+```
+
+A flat `warnings` array is also populated for backward compatibility (same information as formatted strings).
+
+**Detection categories:**
+
+| Category | Severity | Description |
+|---|---|---|
+| `InstructionOverride` | Medium | Phrases instructing the agent to ignore prior instructions |
+| `PersonaHijacking` | Medium | Phrases attempting to redefine the agent's identity or persona |
+| `ModelFormatMarker` | Informational | Tokenizer prefix/suffix tokens from known model formats |
+| `DataExfiltration` | High | Directives to send data to an external URL |
+| `ToolCallCoercion` | High | Directives to invoke agent tools or functions directly |
+| `AuthorityOverride` | High | Phrases asserting false system-level or operator authority |
+| `MemoryPoisoning` | High | Phrases designed to persist malicious instructions in AI memory (MITRE AML.T0080.000) |
+| `JailbreakFraming` | Medium | Well-known jailbreak trigger phrases |
+
+> ⚠️ Pattern detection raises the bar against known attack patterns but cannot prevent adaptive or encoded attacks. Treat `injectionWarnings` as a signal — not a guarantee of safety.
 
 ### HTTP status codes
 
