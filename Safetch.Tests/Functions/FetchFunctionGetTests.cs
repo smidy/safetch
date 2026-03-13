@@ -1,0 +1,221 @@
+﻿using System.IO;
+using System.Net;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.Azure.Functions.Worker.Http;
+using Moq;
+using Safetch.Api.Functions;
+using Safetch.Core.Models;
+using Safetch.Core.Services;
+using Safetch.Tests.Fakes;
+using Xunit;
+
+namespace Safetch.Tests.Functions;
+
+public class FetchFunctionGetTests
+{
+    private static FetchFunction CreateSut(Mock<IFetchService>? mock = null)
+    {
+        mock ??= new Mock<IFetchService>();
+        return new FetchFunction(mock.Object);
+    }
+
+    private static FakeHttpRequestData MakeGetRequest(string queryString = "")
+        => new FakeHttpRequestData(
+            new FakeFunctionContext(),
+            body: "",
+            method: "GET",
+            url: $"http://localhost/api/fetch{(queryString.Length > 0 ? "?" + queryString : "")}");
+
+    private static async Task<string> ReadBody(HttpResponseData response)
+    {
+        response.Body.Position = 0;
+        using var reader = new StreamReader(response.Body);
+        return await reader.ReadToEndAsync();
+    }
+
+    // ── Integration-style tests ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task RunGet_ValidUrl_Returns200()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = true, Url = "https://example.com", Content = "hi", StatusCode = 200 });
+
+        var result = await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com"), new FakeFunctionContext());
+
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        var json = await ReadBody(result);
+        var fetched = JsonSerializer.Deserialize<FetchResponse>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(fetched);
+        Assert.True(fetched!.Success);
+    }
+
+    [Fact]
+    public async Task RunGet_MissingUrlParam_Returns400()
+    {
+        var result = await CreateSut().RunGet(MakeGetRequest("sessionId=abc"), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task RunGet_EmptyUrlParam_Returns400()
+    {
+        var result = await CreateSut().RunGet(MakeGetRequest("url="), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task RunGet_InvalidUrl_Returns400()
+    {
+        var result = await CreateSut().RunGet(MakeGetRequest("url=not-a-url"), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task RunGet_NonHttpUrl_Returns400()
+    {
+        var result = await CreateSut().RunGet(MakeGetRequest("url=ftp://bad"), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task RunGet_BlockedUrl_Returns400()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = false, ErrorCode = "BLOCKED", ErrorMessage = "blocked by guard" });
+
+        var result = await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com"), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task RunGet_FetchFailed_Returns502()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = false, ErrorCode = "FETCH_FAILED", ErrorMessage = "DNS failed" });
+
+        var result = await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com"), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadGateway, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task RunGet_ServiceThrows_Returns502()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ThrowsAsync(new System.Exception("boom"));
+
+        var result = await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com"), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadGateway, result.StatusCode);
+    }
+}
+
+public class FetchFunctionGetParsingTests
+{
+    private static FetchFunction CreateSut(Mock<IFetchService> mock)
+        => new FetchFunction(mock.Object);
+
+    private static FakeHttpRequestData MakeGetRequest(string queryString = "")
+        => new FakeHttpRequestData(
+            new FakeFunctionContext(),
+            body: "",
+            method: "GET",
+            url: $"http://localhost/api/fetch{(queryString.Length > 0 ? "?" + queryString : "")}");
+
+    [Fact]
+    public async Task RunGet_ValidUrlAndSessionId_BuildsCorrectRequest()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = true });
+
+        await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com&sessionId=abc"), new FakeFunctionContext());
+
+        mock.Verify(s => s.FetchAsync(
+            It.Is<FetchRequest>(r => r.Url == "https://example.com" && r.SessionId == "abc"),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunGet_ValidUrlNoSessionId_SessionIdIsNull()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = true });
+
+        await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com"), new FakeFunctionContext());
+
+        mock.Verify(s => s.FetchAsync(
+            It.Is<FetchRequest>(r => r.SessionId == null),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunGet_MissingUrl_DoesNotCallFetchAsync()
+    {
+        var mock = new Mock<IFetchService>();
+
+        await CreateSut(mock).RunGet(MakeGetRequest("sessionId=abc"), new FakeFunctionContext());
+
+        mock.Verify(s => s.FetchAsync(It.IsAny<FetchRequest>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task RunGet_EmptyUrl_DoesNotCallFetchAsync()
+    {
+        var mock = new Mock<IFetchService>();
+
+        await CreateSut(mock).RunGet(MakeGetRequest("url="), new FakeFunctionContext());
+
+        mock.Verify(s => s.FetchAsync(It.IsAny<FetchRequest>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task RunGet_InvalidUrl_DoesNotCallFetchAsync()
+    {
+        var mock = new Mock<IFetchService>();
+
+        await CreateSut(mock).RunGet(MakeGetRequest("url=not-a-url"), new FakeFunctionContext());
+
+        mock.Verify(s => s.FetchAsync(It.IsAny<FetchRequest>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task RunGet_ModeMarkdown_PassesMarkdownModeToService()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = true });
+
+        await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com&mode=markdown"), new FakeFunctionContext());
+
+        mock.Verify(s => s.FetchAsync(
+            It.Is<FetchRequest>(r => r.Mode == ResponseMode.Markdown),
+            default), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunPost_ModeMarkdown_PassesMarkdownModeToService()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = true });
+
+        var sut = new FetchFunction(mock.Object);
+        var req = new FakeHttpRequestData(
+            new FakeFunctionContext(),
+            body: """{"url":"https://example.com","mode":"markdown"}""",
+            method: "POST",
+            url: "http://localhost/api/fetch");
+
+        await sut.Run(req, new FakeFunctionContext());
+
+        mock.Verify(s => s.FetchAsync(
+            It.Is<FetchRequest>(r => r.Mode == ResponseMode.Markdown),
+            default), Times.Once);
+    }
+}

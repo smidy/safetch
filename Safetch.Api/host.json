@@ -1,0 +1,19 @@
+{
+  "version": "2.0",
+  "functionTimeout": "00:10:00",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": false,
+        "maxTelemetryItemsPerSecond": 20
+      }
+    },
+    "logLevel": {
+      "Default": "Information",
+      "Safetch.Api.FetchFunction": "Information",
+      "Safetch.Core.SafeHttpFetcher": "Warning",
+      "Safetch.Core.ContentProcessor": "Warning"
+    }
+  },
+  "AzureWebJobsDisableHomepage" : true
+}

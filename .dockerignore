@@ -1,0 +1,23 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# Secrets — never bake into the image
+local.settings.json
+
+# Test project — not needed in the runtime image
+Safetch.Tests/
+
+# IDE and version control
+.git/
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Docs
+docs/
+
+# Docker files themselves (no need to copy in)
+Dockerfile
+.dockerignore
