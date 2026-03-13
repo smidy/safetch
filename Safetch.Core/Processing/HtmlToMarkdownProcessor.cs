@@ -8,9 +8,11 @@ public class HtmlToMarkdownProcessor : IContentProcessor
     {
         var config = new ReverseMarkdown.Config
         {
+            SuppressDivNewlines = true,
             UnknownTags = ReverseMarkdown.Config.UnknownTagsOption.Bypass,
             RemoveComments = true,
             SmartHrefHandling = true,
+            Base64Images = ReverseMarkdown.Config.Base64ImageHandling.Skip
         };
         var converter = new ReverseMarkdown.Converter(config);
         var markdown = converter.Convert(content);

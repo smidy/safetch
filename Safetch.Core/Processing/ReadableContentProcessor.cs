@@ -18,8 +18,10 @@ public class ReadableContentProcessor : IContentProcessor
     {
         var warnings = new List<string>();
         bool wantText = ctx.MimeType == "text/html+text";
-
-        var article = SmartReader.Reader.ParseArticle(ctx.SourceUrl, content);
+        content = content.Replace("\r\n", "")
+                     .Replace("\n", "")
+                     .Replace("\r", "");
+        var article = SmartReader.Reader.ParseArticle(ctx.SourceUrl, text: content);
 
         if (!article.IsReadable)
         {
