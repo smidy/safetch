@@ -1,0 +1,167 @@
+﻿using System;
+using System.Net;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.Azure.Functions.Worker.Http;
+using Moq;
+using Safetch.Api.Functions;
+using Safetch.Core.Auth;
+using Safetch.Core.Models;
+using Safetch.Core.Services;
+using Safetch.Tests.Fakes;
+using Xunit;
+
+namespace Safetch.Tests.Functions;
+
+public class FetchFunctionRateLimitTests
+{
+    private static readonly FakeHostEnvironment ProdEnv = new("Production");
+    private static readonly FakeHostEnvironment DevEnv = new("Development");
+
+    private static async Task<JsonElement> ReadBody(HttpResponseData response)
+    {
+        response.Body.Position = 0;
+        using var reader = new System.IO.StreamReader(response.Body);
+        var json = await reader.ReadToEndAsync();
+        return JsonSerializer.Deserialize<JsonElement>(json);
+    }
+
+    private static Mock<IApiKeyRateLimiter> RateLimiterThatReturns(bool allowed, int count = 1, int limit = 20)
+    {
+        var mock = new Mock<IApiKeyRateLimiter>();
+        mock.Setup(r => r.CheckAndIncrementAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RateLimitResult(allowed, count, limit, DateTimeOffset.UtcNow.AddHours(1)));
+        return mock;
+    }
+
+    [Fact]
+    public async Task PostFetch_WhenRateLimited_Returns429WithRetryAfter()
+    {
+        var ctx = new FakeFunctionContext();
+        var req = new FakeHttpRequestData(ctx);
+        req.Headers.Add("Authorization", "Bearer valid-token");
+
+        var mockStore = new Mock<IApiKeyStore>();
+        mockStore.Setup(x => x.ValidateKeyAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("github-user-123");
+
+        var mockRateLimiter = RateLimiterThatReturns(false, 21, 20);
+
+        var mockService = new Mock<IFetchService>();
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv);
+
+        var response = await function.Run(req, ctx);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.True(response.Headers.TryGetValues("Retry-After", out _));
+        var body = await ReadBody(response);
+        Assert.Equal("RATE_LIMITED", body.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task PostFetch_WhenRateLimited_ResponseIncludesRateLimitedErrorCode()
+    {
+        var ctx = new FakeFunctionContext();
+        var req = new FakeHttpRequestData(ctx);
+        req.Headers.Add("Authorization", "Bearer valid-token");
+
+        var mockStore = new Mock<IApiKeyStore>();
+        mockStore.Setup(x => x.ValidateKeyAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("github-user-123");
+
+        var mockRateLimiter = RateLimiterThatReturns(false, 21, 20);
+
+        var mockService = new Mock<IFetchService>();
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv);
+
+        var response = await function.Run(req, ctx);
+
+        var body = await ReadBody(response);
+        Assert.Equal("RATE_LIMITED", body.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task GetFetch_WhenRateLimited_Returns429WithRetryAfter()
+    {
+        var ctx = new FakeFunctionContext();
+        var req = new FakeHttpRequestData(ctx, url: "http://localhost/api/fetch?url=https%3A%2F%2Fexample.com");
+        req.Headers.Add("Authorization", "Bearer valid-token");
+
+        var mockStore = new Mock<IApiKeyStore>();
+        mockStore.Setup(x => x.ValidateKeyAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("github-user-123");
+
+        var mockRateLimiter = RateLimiterThatReturns(false, 21, 20);
+
+        var mockService = new Mock<IFetchService>();
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv);
+
+        var response = await function.RunGet(req, ctx);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.True(response.Headers.TryGetValues("Retry-After", out _));
+        var body = await ReadBody(response);
+        Assert.Equal("RATE_LIMITED", body.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task PostFetch_DevelopmentMode_DoesNotCallRateLimiter()
+    {
+        var ctx = new FakeFunctionContext();
+        var req = new FakeHttpRequestData(ctx);
+
+        var mockStore = new Mock<IApiKeyStore>();
+        var mockRateLimiter = new Mock<IApiKeyRateLimiter>();
+
+        var mockService = new Mock<IFetchService>();
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv);
+
+        await function.Run(req, ctx);
+
+        mockRateLimiter.Verify(r => r.CheckAndIncrementAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never());
+    }
+
+    [Fact]
+    public async Task GetFetch_DevelopmentMode_DoesNotCallRateLimiter()
+    {
+        var ctx = new FakeFunctionContext();
+        var req = new FakeHttpRequestData(ctx, method: "GET", url: "http://localhost/api/fetch?url=https%3A%2F%2Fexample.com");
+
+        var mockStore = new Mock<IApiKeyStore>();
+        var mockRateLimiter = new Mock<IApiKeyRateLimiter>();
+
+        var mockService = new Mock<IFetchService>();
+        mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FetchResponse { Success = true, Url = "https://example.com", StatusCode = 200, Content = "" });
+
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv);
+
+        await function.RunGet(req, ctx);
+
+        mockRateLimiter.Verify(r => r.CheckAndIncrementAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never());
+    }
+
+    [Fact]
+    public async Task PostFetch_WhenAllowed_CallsFetchService()
+    {
+        var ctx = new FakeFunctionContext();
+        var req = new FakeHttpRequestData(ctx, body: """{"url":"https://example.com"}""");
+        req.Headers.Add("Authorization", "Bearer valid-token");
+
+        var mockStore = new Mock<IApiKeyStore>();
+        mockStore.Setup(x => x.ValidateKeyAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("github-user-123");
+
+        var mockRateLimiter = RateLimiterThatReturns(true);
+
+        var mockService = new Mock<IFetchService>();
+        mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FetchResponse { Success = true });
+
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv);
+
+        await function.Run(req, ctx);
+
+        mockService.Verify(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()), Times.Once());
+    }
+}

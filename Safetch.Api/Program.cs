@@ -14,11 +14,10 @@ var host = new HostBuilder()
     .ConfigureFunctionsWorkerDefaults()
     .ConfigureServices((context, services) =>
     {
-        // Security pipeline — guards run in Order sequence (1 → 2 → 3 → 4)
+        // Security pipeline — guards run in Order sequence (1 → 2 → 3)
         services.AddRequestGuard<UrlSchemeGuard>(order: 1);
         services.AddRequestGuard<EncodedIpGuard>(order: 2);
         services.AddRequestGuard<SsrfGuard>(order: 3);
-        services.AddRequestGuard<RateLimitGuard>(order: 4);
 
         // Content processing pipeline — runs after fetch, before returning to caller
         // Readable extraction — only active for mode=readable and mode=text
@@ -42,7 +41,7 @@ var host = new HostBuilder()
 
         // IMemoryCache for rate limiting (Singleton — safe to inject into Scoped guards)
         services.AddMemoryCache();
-        services.Configure<RateLimitOptions>(context.Configuration.GetSection("RateLimit"));
+        services.Configure<RateLimitOptions>(context.Configuration.GetSection("Safetch:RateLimit"));
 
         // FetchService wrapped by AuditingFetchService decorator
         services.AddScoped<FetchService>();
@@ -61,6 +60,7 @@ var host = new HostBuilder()
             return tableClient;
         });
         services.AddSingleton<IApiKeyStore, TableApiKeyStore>();
+        services.AddSingleton<IApiKeyRateLimiter, TableApiKeyRateLimiter>();
 
     })
     .Build();

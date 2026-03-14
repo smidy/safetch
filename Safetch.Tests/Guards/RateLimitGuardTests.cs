@@ -25,7 +25,7 @@ public class RateLimitGuardTests : IDisposable
     {
         var opts = Options.Create(new RateLimitOptions
         {
-            MaxFetchesPerSession = maxFetches,
+            MaxFetchesPerWindow = maxFetches,
             Window = window ?? TimeSpan.FromHours(1)
         });
         return new RateLimitGuard(_cache, opts);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
@@ -34,9 +34,9 @@ public class RateLimitGuard : IRequestGuard
 
         var count = Interlocked.Increment(ref counter[0]);
 
-        if (count > _options.MaxFetchesPerSession)
+        if (count > _options.MaxFetchesPerWindow)
             return ValueTask.FromResult(GuardResult.Block(
-                $"Rate limit exceeded: maximum {_options.MaxFetchesPerSession} fetches per session per hour."));
+                $"Rate limit exceeded: maximum {_options.MaxFetchesPerWindow} fetches per window per hour."));
 
         return ValueTask.FromResult(GuardResult.Allow());
     }

@@ -16,12 +16,14 @@ public class FetchFunction
 {
     private readonly IFetchService _fetchService;
     private readonly IApiKeyStore _apiKeyStore;
+    private readonly IApiKeyRateLimiter _rateLimiter;
     private readonly bool _isDevelopment;
 
-    public FetchFunction(IFetchService fetchService, IApiKeyStore apiKeyStore, IHostEnvironment environment)
+    public FetchFunction(IFetchService fetchService, IApiKeyStore apiKeyStore, IApiKeyRateLimiter rateLimiter, IHostEnvironment environment)
     {
         _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
         _apiKeyStore = apiKeyStore ?? throw new ArgumentNullException(nameof(apiKeyStore));
+        _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
         _isDevelopment = environment?.IsDevelopment() ?? false;
     }
 
@@ -36,9 +38,20 @@ public class FetchFunction
         if (!_isDevelopment)
         {
             var token = ExtractBearerToken(req);
-            if (token == null || await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken) == null)
+            var githubUserId = token == null ? null : await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken);
+            if (githubUserId == null)
             {
                 await WriteJsonResponseAsync(response, HttpStatusCode.Unauthorized, new { error = "A valid API key is required. Obtain one at /api/token.", errorCode = "UNAUTHORIZED" });
+                return response;
+            }
+
+            var rateLimit = await _rateLimiter.CheckAndIncrementAsync(githubUserId, executionContext.CancellationToken);
+            if (!rateLimit.Allowed)
+            {
+                var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
+                response.Headers.Add("Retry-After", retryAfter.ToString());
+                await WriteJsonResponseAsync(response, HttpStatusCode.TooManyRequests,
+                    new { error = "Rate limit exceeded. Maximum 20 requests per hour.", errorCode = "RATE_LIMITED" });
                 return response;
             }
         }
@@ -120,9 +133,20 @@ public class FetchFunction
         if (!_isDevelopment)
         {
             var token = ExtractBearerToken(req);
-            if (token == null || await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken) == null)
+            var githubUserId = token == null ? null : await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken);
+            if (githubUserId == null)
             {
                 await WriteJsonResponseAsync(response, HttpStatusCode.Unauthorized, new { error = "A valid API key is required. Obtain one at /api/token.", errorCode = "UNAUTHORIZED" });
+                return response;
+            }
+
+            var rateLimit = await _rateLimiter.CheckAndIncrementAsync(githubUserId, executionContext.CancellationToken);
+            if (!rateLimit.Allowed)
+            {
+                var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
+                response.Headers.Add("Retry-After", retryAfter.ToString());
+                await WriteJsonResponseAsync(response, HttpStatusCode.TooManyRequests,
+                    new { error = "Rate limit exceeded. Maximum 20 requests per hour.", errorCode = "RATE_LIMITED" });
                 return response;
             }
         }

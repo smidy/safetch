@@ -1,6 +1,8 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Net;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker.Http;
 using Moq;
@@ -27,11 +29,19 @@ public class FetchFunctionTests
 
     private static readonly FakeHostEnvironment ProdEnv = new("Production");
 
+    private static Mock<IApiKeyRateLimiter> PermissiveRateLimiter()
+    {
+        var mock = new Mock<IApiKeyRateLimiter>();
+        mock.Setup(r => r.CheckAndIncrementAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RateLimitResult(true, 1, 20, DateTimeOffset.UtcNow.AddHours(1)));
+        return mock;
+    }
+
     private static FetchFunction CreateSut(Mock<IFetchService>? mock = null, Mock<IApiKeyStore>? store = null)
     {
         mock ??= new Mock<IFetchService>();
         store ??= AuthorizedStore();
-        return new FetchFunction(mock.Object, store.Object, ProdEnv);
+        return new FetchFunction(mock.Object, store.Object, PermissiveRateLimiter().Object, ProdEnv);
     }
 
     // Creates a POST request with the valid bearer token already set
@@ -157,7 +167,7 @@ public class FetchFunctionTests
         [Fact]
         public async Task Run_InvalidJson_ErrorResponseIncludesErrorCode()
         {
-            var sut = new FetchFunction(new Mock<IFetchService>().Object, AuthorizedStore().Object, ProdEnv);
+            var sut = new FetchFunction(new Mock<IFetchService>().Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv);
             var result = await sut.Run(MakeRequest("not json"), new FakeFunctionContext());
             var body = await ReadJsonBody(result);
             Assert.True(body.TryGetProperty("error", out _));
@@ -171,7 +181,7 @@ public class FetchFunctionTests
             mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
                 .ReturnsAsync(new FetchResponse { Success = false, ErrorCode = "BLOCKED", ErrorMessage = "bad url" });
 
-            var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, ProdEnv);
+            var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv);
             var result = await sut.Run(MakeRequest($"{{\u0022url\u0022:\u0022http://example.com\u0022}}"), new FakeFunctionContext());
             var body = await ReadJsonBody(result);
 
