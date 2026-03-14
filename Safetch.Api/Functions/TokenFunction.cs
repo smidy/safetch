@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Safetch.Core.Auth;
 
 namespace Safetch.Api.Functions;
@@ -13,14 +15,16 @@ public class TokenFunction
 {
     private readonly IApiKeyStore _store;
     private readonly bool _isDevelopment;
+    private readonly ILogger<TokenFunction> _logger;
 
     // Fake identity used when running locally in Development mode
     private static readonly EasyAuthIdentity DevIdentity = new("dev-user", "local-dev");
 
-    public TokenFunction(IApiKeyStore store, IHostEnvironment environment)
+    public TokenFunction(IApiKeyStore store, IHostEnvironment environment, ILogger<TokenFunction> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _isDevelopment = environment?.IsDevelopment() ?? false;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -68,9 +72,21 @@ public class TokenFunction
         if (_isDevelopment)
             return DevIdentity;
 
+        // Log all incoming headers to diagnose missing X-MS-CLIENT-PRINCIPAL
+        _logger.LogInformation("TokenFunction incoming headers: {Headers}",
+            string.Join(", ", req.Headers.Select(h => $"{h.Key}=[{string.Join("|", h.Value)}]")));
+
         req.Headers.TryGetValues("x-ms-client-principal", out var values);
         var header = values != null ? string.Join("", values) : null;
-        return EasyAuthPrincipal.Parse(header);
+
+        _logger.LogInformation("X-MS-CLIENT-PRINCIPAL present: {Present}, value length: {Length}",
+            header != null, header?.Length ?? 0);
+
+        var identity = EasyAuthPrincipal.Parse(header);
+        _logger.LogInformation("Parsed identity — UserId: {UserId}, Login: {Login}",
+            identity?.UserId ?? "(null)", identity?.Login ?? "(null)");
+
+        return identity;
     }
 
     private static async Task<HttpResponseData> JsonAsync<T>(HttpRequestData req, HttpStatusCode status, T body)

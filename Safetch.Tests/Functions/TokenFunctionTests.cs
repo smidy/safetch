@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Safetch.Api.Functions;
 using Safetch.Core.Auth;
@@ -16,6 +17,7 @@ public class TokenFunctionTests
     private readonly Mock<IApiKeyStore> _mockStore = new();
     // All tests run in Production mode so auth checks are enforced
     private static readonly FakeHostEnvironment ProdEnv = new("Production");
+    private static readonly NullLogger<TokenFunction> NullLog = new();
 
     private static string BuildPrincipalHeader(string userId, string login)
     {
@@ -36,7 +38,7 @@ public class TokenFunctionTests
     {
         var ctx = new FakeFunctionContext();
         var req = new FakeHttpRequestData(ctx);
-        var function = new TokenFunction(_mockStore.Object, ProdEnv);
+        var function = new TokenFunction(_mockStore.Object, ProdEnv, NullLog);
 
         var response = await function.GetToken(req, ctx);
 
@@ -51,7 +53,7 @@ public class TokenFunctionTests
         var ctx = new FakeFunctionContext();
         var req = new FakeHttpRequestData(ctx);
         req.Headers.Add("x-ms-client-principal", "invalid-base64!!!");
-        var function = new TokenFunction(_mockStore.Object, ProdEnv);
+        var function = new TokenFunction(_mockStore.Object, ProdEnv, NullLog);
 
         var response = await function.GetToken(req, ctx);
 
@@ -68,7 +70,7 @@ public class TokenFunctionTests
         req.Headers.Add("x-ms-client-principal", BuildPrincipalHeader("123", "octocat"));
         _mockStore.Setup(x => x.GetKeyAsync("123", It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync((string?)null);
-        var function = new TokenFunction(_mockStore.Object, ProdEnv);
+        var function = new TokenFunction(_mockStore.Object, ProdEnv, NullLog);
 
         var response = await function.GetToken(req, ctx);
 
@@ -85,7 +87,7 @@ public class TokenFunctionTests
         req.Headers.Add("x-ms-client-principal", BuildPrincipalHeader("123", "octocat"));
         _mockStore.Setup(x => x.GetKeyAsync("123", It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync("abc123");
-        var function = new TokenFunction(_mockStore.Object, ProdEnv);
+        var function = new TokenFunction(_mockStore.Object, ProdEnv, NullLog);
 
         var response = await function.GetToken(req, ctx);
 
@@ -100,7 +102,7 @@ public class TokenFunctionTests
     {
         var ctx = new FakeFunctionContext();
         var req = new FakeHttpRequestData(ctx);
-        var function = new TokenFunction(_mockStore.Object, ProdEnv);
+        var function = new TokenFunction(_mockStore.Object, ProdEnv, NullLog);
 
         var response = await function.PostToken(req, ctx);
 
@@ -117,7 +119,7 @@ public class TokenFunctionTests
         req.Headers.Add("x-ms-client-principal", BuildPrincipalHeader("123", "octocat"));
         _mockStore.Setup(x => x.GetKeyAsync("123", It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync("abc123");
-        var function = new TokenFunction(_mockStore.Object, ProdEnv);
+        var function = new TokenFunction(_mockStore.Object, ProdEnv, NullLog);
 
         var response = await function.PostToken(req, ctx);
 
@@ -138,7 +140,7 @@ public class TokenFunctionTests
             .ReturnsAsync((string?)null);
         _mockStore.Setup(x => x.CreateKeyAsync("123", "octocat", It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync("def456");
-        var function = new TokenFunction(_mockStore.Object, ProdEnv);
+        var function = new TokenFunction(_mockStore.Object, ProdEnv, NullLog);
 
         var response = await function.PostToken(req, ctx);
 
@@ -159,7 +161,7 @@ public class TokenFunctionTests
         var store = new Mock<IApiKeyStore>();
         store.Setup(x => x.GetKeyAsync("dev-user", It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync((string?)null);
-        var function = new TokenFunction(store.Object, new FakeHostEnvironment("Development"));
+        var function = new TokenFunction(store.Object, new FakeHostEnvironment("Development"), NullLog);
 
         var response = await function.GetToken(req, ctx);
 
@@ -177,7 +179,7 @@ public class TokenFunctionTests
             .ReturnsAsync((string?)null);
         store.Setup(x => x.CreateKeyAsync("dev-user", "local-dev", It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync("dev-generated-key");
-        var function = new TokenFunction(store.Object, new FakeHostEnvironment("Development"));
+        var function = new TokenFunction(store.Object, new FakeHostEnvironment("Development"), NullLog);
 
         var response = await function.PostToken(req, ctx);
 
