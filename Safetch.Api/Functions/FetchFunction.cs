@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Hosting;
+using Safetch.Core.Auth;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
 
@@ -13,10 +15,14 @@ namespace Safetch.Api.Functions;
 public class FetchFunction
 {
     private readonly IFetchService _fetchService;
+    private readonly IApiKeyStore _apiKeyStore;
+    private readonly bool _isDevelopment;
 
-    public FetchFunction(IFetchService fetchService)
+    public FetchFunction(IFetchService fetchService, IApiKeyStore apiKeyStore, IHostEnvironment environment)
     {
         _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
+        _apiKeyStore = apiKeyStore ?? throw new ArgumentNullException(nameof(apiKeyStore));
+        _isDevelopment = environment?.IsDevelopment() ?? false;
     }
 
     [Function("Fetch")]
@@ -25,6 +31,17 @@ public class FetchFunction
         FunctionContext executionContext)
     {
         var response = req.CreateResponse();
+
+        // Validate API key (bypassed in Development environment)
+        if (!_isDevelopment)
+        {
+            var token = ExtractBearerToken(req);
+            if (token == null || await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken) == null)
+            {
+                await WriteJsonResponseAsync(response, HttpStatusCode.Unauthorized, new { error = "A valid API key is required. Obtain one at /api/token.", errorCode = "UNAUTHORIZED" });
+                return response;
+            }
+        }
 
         // Deserialize request body
         FetchRequest? fetchRequest;
@@ -99,6 +116,17 @@ public class FetchFunction
     {
         var response = req.CreateResponse();
 
+        // Validate API key (bypassed in Development environment)
+        if (!_isDevelopment)
+        {
+            var token = ExtractBearerToken(req);
+            if (token == null || await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken) == null)
+            {
+                await WriteJsonResponseAsync(response, HttpStatusCode.Unauthorized, new { error = "A valid API key is required. Obtain one at /api/token.", errorCode = "UNAUTHORIZED" });
+                return response;
+            }
+        }
+
         // Parse query parameters manually — System.Web is not reliably available in isolated worker
         var query = req.Url.Query.TrimStart('?');
         var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -162,5 +190,14 @@ public class FetchFunction
         response.StatusCode = statusCode;
         response.Headers.Add("Content-Type", "application/json; charset=utf-8");
         await response.WriteStringAsync(JsonSerializer.Serialize(body));
+    }
+
+    private static string? ExtractBearerToken(HttpRequestData req)
+    {
+        req.Headers.TryGetValues("Authorization", out var values);
+        var header = values != null ? string.Join("", values) : null;
+        if (header == null || !header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return null;
+        return header["Bearer ".Length..].Trim();
     }
 }

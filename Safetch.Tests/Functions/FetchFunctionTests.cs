@@ -1,10 +1,11 @@
-using System.IO;
+﻿using System.IO;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker.Http;
 using Moq;
 using Safetch.Api.Functions;
+using Safetch.Core.Auth;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
 using Safetch.Tests.Fakes;
@@ -14,14 +15,32 @@ namespace Safetch.Tests.Functions;
 
 public class FetchFunctionTests
 {
-    private static FetchFunction CreateSut(Mock<IFetchService>? mock = null)
+    private const string ValidToken = "test-api-key";
+
+    private static Mock<IApiKeyStore> AuthorizedStore()
     {
-        mock ??= new Mock<IFetchService>();
-        return new FetchFunction(mock.Object);
+        var store = new Mock<IApiKeyStore>();
+        store.Setup(s => s.ValidateKeyAsync(ValidToken, It.IsAny<System.Threading.CancellationToken>()))
+            .ReturnsAsync("github-user-1");
+        return store;
     }
 
+    private static readonly FakeHostEnvironment ProdEnv = new("Production");
+
+    private static FetchFunction CreateSut(Mock<IFetchService>? mock = null, Mock<IApiKeyStore>? store = null)
+    {
+        mock ??= new Mock<IFetchService>();
+        store ??= AuthorizedStore();
+        return new FetchFunction(mock.Object, store.Object, ProdEnv);
+    }
+
+    // Creates a POST request with the valid bearer token already set
     private static FakeHttpRequestData MakeRequest(string body)
-        => new FakeHttpRequestData(new FakeFunctionContext(), body);
+    {
+        var req = new FakeHttpRequestData(new FakeFunctionContext(), body);
+        req.Headers.Add("Authorization", $"Bearer {ValidToken}");
+        return req;
+    }
 
     private static async Task<string> ReadBody(HttpResponseData response)
     {
@@ -108,7 +127,16 @@ public class FetchFunctionTests
 
     public class FetchFunctionErrorShapeTests
     {
-        // Helper to read body from response
+        private const string ValidToken = "test-api-key";
+
+        private static Mock<IApiKeyStore> AuthorizedStore()
+        {
+            var store = new Mock<IApiKeyStore>();
+            store.Setup(s => s.ValidateKeyAsync(ValidToken, It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync("github-user-1");
+            return store;
+        }
+
         private static async Task<JsonElement> ReadJsonBody(HttpResponseData response)
         {
             response.Body.Position = 0;
@@ -118,12 +146,18 @@ public class FetchFunctionTests
         }
 
         private static FakeHttpRequestData MakeRequest(string body)
-            => new FakeHttpRequestData(new FakeFunctionContext(), body);
+        {
+            var req = new FakeHttpRequestData(new FakeFunctionContext(), body);
+            req.Headers.Add("Authorization", $"Bearer {ValidToken}");
+            return req;
+        }
+
+        private static readonly FakeHostEnvironment ProdEnv = new("Production");
 
         [Fact]
         public async Task Run_InvalidJson_ErrorResponseIncludesErrorCode()
         {
-            var sut = new FetchFunction(new Mock<IFetchService>().Object);
+            var sut = new FetchFunction(new Mock<IFetchService>().Object, AuthorizedStore().Object, ProdEnv);
             var result = await sut.Run(MakeRequest("not json"), new FakeFunctionContext());
             var body = await ReadJsonBody(result);
             Assert.True(body.TryGetProperty("error", out _));
@@ -137,7 +171,7 @@ public class FetchFunctionTests
             mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
                 .ReturnsAsync(new FetchResponse { Success = false, ErrorCode = "BLOCKED", ErrorMessage = "bad url" });
 
-            var sut = new FetchFunction(mock.Object);
+            var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, ProdEnv);
             var result = await sut.Run(MakeRequest($"{{\u0022url\u0022:\u0022http://example.com\u0022}}"), new FakeFunctionContext());
             var body = await ReadJsonBody(result);
 

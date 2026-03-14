@@ -1,7 +1,9 @@
-﻿using Microsoft.Azure.Functions.Worker;
+﻿using Azure.Data.Tables;
+using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Safetch.Core.Auth;
 using Safetch.Core.Extensions;
 using Safetch.Core.Guards;
 using Safetch.Core.Http;
@@ -48,6 +50,17 @@ var host = new HostBuilder()
             new AuditingFetchService(
                 sp.GetRequiredService<FetchService>(),
                 sp.GetRequiredService<ILogger<AuditingFetchService>>()));
+
+        // Azure Table Storage for API key persistence
+        services.AddSingleton(sp =>
+        {
+            var connStr = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
+                ?? throw new InvalidOperationException("AzureWebJobsStorage is not configured.");
+            var tableClient = new TableClient(connStr, "ApiKeys");
+            tableClient.CreateIfNotExists();
+            return tableClient;
+        });
+        services.AddSingleton<IApiKeyStore, TableApiKeyStore>();
 
     })
     .Build();

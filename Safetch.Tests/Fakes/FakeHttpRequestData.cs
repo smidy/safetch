@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Claims;
@@ -27,7 +27,7 @@ public class FakeHttpRequestData : HttpRequestData
     }
 
     public override Stream Body => new MemoryStream(Encoding.UTF8.GetBytes(_body));
-    public override HttpHeadersCollection Headers => new HttpHeadersCollection();
+    public override HttpHeadersCollection Headers { get; } = new HttpHeadersCollection();
     public override IReadOnlyCollection<IHttpCookie> Cookies => Array.Empty<IHttpCookie>();
     public override Uri Url => new Uri(_url);
     public override IEnumerable<ClaimsIdentity> Identities => Array.Empty<ClaimsIdentity>();

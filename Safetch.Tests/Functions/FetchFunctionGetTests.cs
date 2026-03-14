@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker.Http;
 using Moq;
 using Safetch.Api.Functions;
+using Safetch.Core.Auth;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
 using Safetch.Tests.Fakes;
@@ -14,18 +15,36 @@ namespace Safetch.Tests.Functions;
 
 public class FetchFunctionGetTests
 {
-    private static FetchFunction CreateSut(Mock<IFetchService>? mock = null)
+    private const string ValidToken = "test-api-key";
+
+    // Store mock that accepts any key and returns a valid user ID
+    private static readonly FakeHostEnvironment ProdEnv = new("Production");
+
+    private static Mock<IApiKeyStore> AuthorizedStore()
+    {
+        var store = new Mock<IApiKeyStore>();
+        store.Setup(s => s.ValidateKeyAsync(ValidToken, It.IsAny<System.Threading.CancellationToken>()))
+            .ReturnsAsync("github-user-1");
+        return store;
+    }
+
+    private static FetchFunction CreateSut(Mock<IFetchService>? mock = null, Mock<IApiKeyStore>? store = null)
     {
         mock ??= new Mock<IFetchService>();
-        return new FetchFunction(mock.Object);
+        store ??= AuthorizedStore();
+        return new FetchFunction(mock.Object, store.Object, ProdEnv);
     }
 
     private static FakeHttpRequestData MakeGetRequest(string queryString = "")
-        => new FakeHttpRequestData(
+    {
+        var req = new FakeHttpRequestData(
             new FakeFunctionContext(),
             body: "",
             method: "GET",
             url: $"http://localhost/api/fetch{(queryString.Length > 0 ? "?" + queryString : "")}");
+        req.Headers.Add("Authorization", $"Bearer {ValidToken}");
+        return req;
+    }
 
     private static async Task<string> ReadBody(HttpResponseData response)
     {
@@ -116,15 +135,30 @@ public class FetchFunctionGetTests
 
 public class FetchFunctionGetParsingTests
 {
-    private static FetchFunction CreateSut(Mock<IFetchService> mock)
-        => new FetchFunction(mock.Object);
+    private const string ValidToken = "test-api-key";
+    private static readonly FakeHostEnvironment ProdEnv = new("Production");
+
+    private static Mock<IApiKeyStore> AuthorizedStore()
+    {
+        var store = new Mock<IApiKeyStore>();
+        store.Setup(s => s.ValidateKeyAsync(ValidToken, It.IsAny<System.Threading.CancellationToken>()))
+            .ReturnsAsync("github-user-1");
+        return store;
+    }
+
+    private static FetchFunction CreateSut(Mock<IFetchService> mock, Mock<IApiKeyStore>? store = null)
+        => new FetchFunction(mock.Object, (store ?? AuthorizedStore()).Object, ProdEnv);
 
     private static FakeHttpRequestData MakeGetRequest(string queryString = "")
-        => new FakeHttpRequestData(
+    {
+        var req = new FakeHttpRequestData(
             new FakeFunctionContext(),
             body: "",
             method: "GET",
             url: $"http://localhost/api/fetch{(queryString.Length > 0 ? "?" + queryString : "")}");
+        req.Headers.Add("Authorization", $"Bearer {ValidToken}");
+        return req;
+    }
 
     [Fact]
     public async Task RunGet_ValidUrlAndSessionId_BuildsCorrectRequest()
@@ -205,12 +239,13 @@ public class FetchFunctionGetParsingTests
         mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
             .ReturnsAsync(new FetchResponse { Success = true });
 
-        var sut = new FetchFunction(mock.Object);
+        var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, ProdEnv);
         var req = new FakeHttpRequestData(
             new FakeFunctionContext(),
             body: """{"url":"https://example.com","mode":"markdown"}""",
             method: "POST",
             url: "http://localhost/api/fetch");
+        req.Headers.Add("Authorization", $"Bearer {ValidToken}");
 
         await sut.Run(req, new FakeFunctionContext());
 
