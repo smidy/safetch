@@ -24,7 +24,6 @@ public class AuditingFetchService : IFetchService
         _logger.LogInformation("fetch.started {@Event}", new
         {
             event_type = "fetch.started",
-            session_id = request.SessionId,
             url_host = GetHost(request.Url),
             timestamp = DateTimeOffset.UtcNow
         });
@@ -39,7 +38,6 @@ public class AuditingFetchService : IFetchService
             _logger.LogError(ex, "fetch.error {@Event}", new
             {
                 event_type = "fetch.error",
-                session_id = request.SessionId,
                 url_host = GetHost(request.Url),
                 duration_ms = sw.ElapsedMilliseconds
             });
@@ -51,7 +49,6 @@ public class AuditingFetchService : IFetchService
             _logger.LogWarning("fetch.blocked {@Event}", new
             {
                 event_type = "fetch.blocked",
-                session_id = request.SessionId,
                 url_host = GetHost(request.Url),
                 error_code = response.ErrorCode,
                 duration_ms = sw.ElapsedMilliseconds
@@ -62,7 +59,6 @@ public class AuditingFetchService : IFetchService
             _logger.LogInformation("fetch.completed {@Event}", new
             {
                 event_type = "fetch.completed",
-                session_id = request.SessionId,
                 url_host = GetHost(request.Url),
                 status_code = response.StatusCode,
                 content_type = response.ContentType,
@@ -76,7 +72,6 @@ public class AuditingFetchService : IFetchService
                 _logger.LogWarning("fetch.content_warning {@Event}", new
                 {
                     event_type = "fetch.content_warning",
-                    session_id = request.SessionId,
                     url_host = GetHost(request.Url),
                     category = warning.Category,
                     pattern = warning.PatternMatched,

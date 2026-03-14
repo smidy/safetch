@@ -82,7 +82,7 @@ public class FetchFunctionGetTests
     [Fact]
     public async Task RunGet_MissingUrlParam_Returns400()
     {
-        var result = await CreateSut().RunGet(MakeGetRequest("sessionId=abc"), new FakeFunctionContext());
+        var result = await CreateSut().RunGet(MakeGetRequest("someOtherParam=abc"), new FakeFunctionContext());
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
@@ -176,40 +176,13 @@ public class FetchFunctionGetParsingTests
         return req;
     }
 
-    [Fact]
-    public async Task RunGet_ValidUrlAndSessionId_BuildsCorrectRequest()
-    {
-        var mock = new Mock<IFetchService>();
-        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
-            .ReturnsAsync(new FetchResponse { Success = true });
-
-        await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com&sessionId=abc"), new FakeFunctionContext());
-
-        mock.Verify(s => s.FetchAsync(
-            It.Is<FetchRequest>(r => r.Url == "https://example.com" && r.SessionId == "abc"),
-            default), Times.Once);
-    }
-
-    [Fact]
-    public async Task RunGet_ValidUrlNoSessionId_SessionIdIsNull()
-    {
-        var mock = new Mock<IFetchService>();
-        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
-            .ReturnsAsync(new FetchResponse { Success = true });
-
-        await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com"), new FakeFunctionContext());
-
-        mock.Verify(s => s.FetchAsync(
-            It.Is<FetchRequest>(r => r.SessionId == null),
-            default), Times.Once);
-    }
 
     [Fact]
     public async Task RunGet_MissingUrl_DoesNotCallFetchAsync()
     {
         var mock = new Mock<IFetchService>();
 
-        await CreateSut(mock).RunGet(MakeGetRequest("sessionId=abc"), new FakeFunctionContext());
+        await CreateSut(mock).RunGet(MakeGetRequest("someOtherParam=abc"), new FakeFunctionContext());
 
         mock.Verify(s => s.FetchAsync(It.IsAny<FetchRequest>(), default), Times.Never);
     }

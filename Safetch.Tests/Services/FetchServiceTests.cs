@@ -93,17 +93,4 @@ public class FetchServiceTests
         g2.Verify(g => g.CheckAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task FetchAsync_GuardBlocks_ResponseContainsSessionId()
-    {
-        var guard = new Mock<IRequestGuard>();
-        guard.Setup(g => g.CheckAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
-             .ReturnsAsync(GuardResult.Block("blocked"));
-        guard.Setup(g => g.Name).Returns("TestGuard");
-
-        var sut = CreateSut([new OrderedGuard(1, guard.Object)]);
-        var result = await sut.FetchAsync(new FetchRequest { Url = "http://example.com", SessionId = "my-session" });
-
-        Assert.Equal("my-session", result.SessionId);
-    }
 }

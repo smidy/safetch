@@ -7,7 +7,6 @@ public class FetchResponse
 {
     public bool Success { get; init; } = true;
     public string Url { get; init; } = string.Empty;
-    public string? SessionId { get; init; }
     public string Content { get; init; } = string.Empty;
     public int StatusCode { get; init; }
     public string? ContentType { get; init; }

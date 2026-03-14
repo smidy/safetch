@@ -68,7 +68,6 @@ public class FetchFunction
             fetchRequest = new FetchRequest
             {
                 Url = dto?.Url,
-                SessionId = dto?.SessionId,
                 Mode = ParseMode(dto?.Mode)
             };
         }
@@ -112,7 +111,7 @@ public class FetchFunction
         return response;
     }
 
-    private record FetchRequestDto(string? Url, string? SessionId, string? Mode);
+    private record FetchRequestDto(string? Url, string? Mode);
 
     private static ResponseMode ParseMode(string? mode) => mode?.ToLowerInvariant() switch
     {
@@ -164,7 +163,6 @@ public class FetchFunction
         }
 
         parameters.TryGetValue("url", out var url);
-        parameters.TryGetValue("sessionId", out var sessionId);
         parameters.TryGetValue("mode", out var modeStr);
 
         // Validate: url must be present, non-empty, and a valid absolute HTTP/HTTPS URI
@@ -180,7 +178,6 @@ public class FetchFunction
         var fetchRequest = new FetchRequest
         {
             Url = url,
-            SessionId = string.IsNullOrWhiteSpace(sessionId) ? null : sessionId,
             Mode = ParseMode(modeStr)
         };
 

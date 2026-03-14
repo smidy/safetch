@@ -22,8 +22,8 @@ public class AuditingFetchServiceTests
         return (sut, inner, logger);
     }
 
-    private static FetchRequest MakeRequest(string? sessionId = "test-session")
-        => new FetchRequest { Url = "https://example.com", SessionId = sessionId };
+    private static FetchRequest MakeRequest()
+        => new FetchRequest { Url = "https://example.com" };
 
     private static FetchResponse MakeSuccess(InjectionWarning[]? injectionWarnings = null)
         => new FetchResponse
@@ -160,7 +160,7 @@ public class AuditingFetchServiceTests
              .ReturnsAsync(MakeSuccess());
 
         // Should not throw — GetHost handles null/malformed gracefully
-        var result = await sut.FetchAsync(new FetchRequest { Url = url, SessionId = "s" }, CancellationToken.None);
+        var result = await sut.FetchAsync(new FetchRequest { Url = url }, CancellationToken.None);
         Assert.NotNull(result);
     }
 }
