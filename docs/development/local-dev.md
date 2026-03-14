@@ -1,4 +1,4 @@
-# Safetch Local Development Guide
+﻿# Safetch Local Development Guide
 
 ## Prerequisites
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
@@ -16,11 +16,11 @@
    ```
 3. Test the `/api/fetch` endpoint:
    ```bash
-   curl "http://localhost:7071/api/fetch?uri=https://example.com"
+   curl "http://localhost:7071/api/fetch?url=https://example.com"
    ```
 
 > ✅ Expected: `200 OK` with JSON response containing fetched content.
-> ⚠️ `400 Bad Request`: missing or invalid `uri` query param — expected for empty GET.
+> ⚠️ `400 Bad Request`: missing or invalid `url` query param — expected for empty GET.
 
 ## Configuration Files
 | File | Purpose |

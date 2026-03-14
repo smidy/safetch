@@ -1,4 +1,4 @@
-# Running Safetch in Docker
+﻿# Running Safetch in Docker
 
 ## Build the image
 ```bash
@@ -10,8 +10,7 @@ docker build -t safetch .
 docker run -p 7071:80 \
   -e AzureWebJobsStorage="UseDevelopmentStorage=true" \
   -e FUNCTIONS_WORKER_RUNTIME="dotnet-isolated" \
-  -e RateLimit__WindowSeconds=60 \
-  -e RateLimit__MaxRequests=30 \
+  -e ASPNETCORE_ENVIRONMENT=Development \
   safetch
 ```
 
@@ -40,9 +39,8 @@ DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=<key>;Blob
 |---|---|---|---|
 | `AzureWebJobsStorage` | Yes | Storage connection. Use Azurite or a real connection string. | `UseDevelopmentStorage=true` |
 | `FUNCTIONS_WORKER_RUNTIME` | Yes | Must be `dotnet-isolated` | `dotnet-isolated` |
-| `RateLimit__WindowSeconds` | No | Rate limit window in seconds | `60` |
-| `RateLimit__MaxRequests` | No | Max requests per window per session | `30` |
+| `ASPNETCORE_ENVIRONMENT` | No | Set to `Development` to bypass all auth and rate limiting (already set in Dockerfile for local dev) | `Development` |
 
 ## Notes
-- Authentication is not enforced in the container — treat the exposed port as internal/trusted only.
+- In production deployments, `ASPNETCORE_ENVIRONMENT` should NOT be set to `Development` — remove it or set to `Production` to enforce API key auth and rate limiting. `AzureWebJobsStorage` must point to a real Azure Storage account for API key persistence.
 - `local.settings.json` is excluded by `.dockerignore` and must never be copied into the image.

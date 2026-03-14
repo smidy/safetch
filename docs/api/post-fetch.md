@@ -21,7 +21,6 @@ JSON body:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `url` | string | Yes | Absolute HTTP or HTTPS URL to fetch. |
-| `sessionId` | string | No | Session identifier for rate limiting and audit. Auto-generated if omitted. |
 | `mode` | string | No | Response mode. One of `raw` (default), `readable`, `text`, `markdown`. See [Response Modes](#response-modes) below. |
 
 ```json
@@ -36,7 +35,6 @@ JSON body:
 | `url` | string | The fetched URL |
 | `content` | string | Processed content |
 | `statusCode` | integer | Upstream HTTP status code |
-| `sessionId` | string | Session ID used for this request |
 | `injectionWarnings` | array | Structured injection warnings detected during processing. Empty array if none. |
 
 Each `injectionWarnings` item:
@@ -53,7 +51,7 @@ Each `injectionWarnings` item:
   "url": "https://example.com",
   "content": "# Example Domain\n...",
   "statusCode": 200,
-  "sessionId": "abc123",
+
   "injectionWarnings": []
 }
 ```
@@ -96,25 +94,25 @@ All responses are `application/json; charset=utf-8`.
 
 ```bash
 # Default (raw)
-curl -X POST https://api.safetch.ai/api/fetch \
+curl -X POST https://www.safetch.ai/api/fetch \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 
 # Readable extraction
-curl -X POST https://api.safetch.ai/api/fetch \
+curl -X POST https://www.safetch.ai/api/fetch \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "mode": "readable"}'
 
 # Plain text
-curl -X POST https://api.safetch.ai/api/fetch \
+curl -X POST https://www.safetch.ai/api/fetch \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "mode": "text"}'
 
 # Markdown (article extraction + Markdown conversion)
-curl -X POST https://api.safetch.ai/api/fetch \
+curl -X POST https://www.safetch.ai/api/fetch \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "mode": "markdown"}'

@@ -1,4 +1,4 @@
-**Scope**: `Safetch.Core`
+﻿**Scope**: `Safetch.Core`
 **Tags**: domain, fetch-service, guards, pipeline, content-processing, core
 **Summary**: How FetchService orchestrates the guard pipeline, SafeHttpFetcher, and content processor pipeline to produce a FetchResponse.
 **See Also**: security-pipeline.md, content-processing.md, ../api/post-fetch.md, ../architecture/overview.md
@@ -39,9 +39,9 @@ FetchRequest
   ├─ MIME type parsed from Content-Type header (strip parameters, lowercase, default "text/plain")
   │
   ├─ ContentProcessorPipeline.RunAsync(content, ProcessingContext(mimeType, url))
-  │    └─ Returns ProcessorResult { Content, Warnings }
+  │    └─ Returns ProcessorResult { Content, InjectionWarnings }
   │
-  └─ FetchResponse { Success=true, Url, Content, StatusCode, Warnings }
+  └─ FetchResponse { Success=true, Url, Content, StatusCode, InjectionWarnings }
 ```
 
 ## FetchResponse shape
@@ -52,9 +52,9 @@ FetchRequest
 | `Url` | string | Echo of request URL (only set on success) |
 | `Content` | string | Processed body — HTML converted to Markdown, sanitised, spotlighted (only set on success) |
 | `StatusCode` | int | Upstream HTTP status (only set on success) |
-| `Warnings` | `IReadOnlyList<string>` | Accumulated from all processors — always `[]` on failure paths, never omitted |
+| `InjectionWarnings` | `IReadOnlyList<InjectionWarning>` | Structured injection warnings detected during processing; empty when clean |
 | `ErrorCode` | string? | `"BLOCKED"` or `"FETCH_FAILED"` |
-| `ErrorMessage` | string? | Human-readable reason for the failure |
+| `Error` | string? | Human-readable reason for the failure |
 
 ## Upstream HTTP error handling
 

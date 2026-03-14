@@ -12,7 +12,6 @@ Safetch is a minimal, auditable, and secure HTTP fetch service designed for AI a
 - **Content sanitisation pipeline**: HTML sanitisation, Unicode Tag stripping, categorised injection detection, and spotlighting of suspicious patterns
 - **Readable content extraction**: Mozilla Readability integration for clean article body extraction
 - **LLM-ready output**: Markdown conversion of readable content — ideal for prompt context
-- **Per-session rate limiting**: Prevent abuse without requiring global auth state
 - **Structured audit telemetry**: All fetches emit structured logs with warnings, blocks, and metadata
 
 ## Architecture
@@ -56,7 +55,7 @@ curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
 
 ### GET /fetch
 
-Query parameters: `url` (required), `sessionId` (optional), `mode` (optional: `raw` \| `readable` \| `text` \| `markdown`, default `raw`)
+Query parameters: `url` (required), `mode` (optional: `raw` \| `readable` \| `text` \| `markdown`, default `raw`)
 
 ```bash
 curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
@@ -70,8 +69,6 @@ curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
   "url": "https://example.com",
   "content": "# Example Domain\n...",
   "statusCode": 200,
-  "sessionId": "abc123",
-  "warnings": [],
   "injectionWarnings": []
 }
 ```
@@ -86,7 +83,7 @@ curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
 
 ### POST /fetch
 
-JSON body: `{ "url": "...", "sessionId": "...", "mode": "..." }` (`sessionId` and `mode` optional)
+JSON body: `{ "url": "...", "mode": "..." }` (`mode` optional)
 
 ```bash
 curl -X POST http://localhost:7071/api/fetch \
@@ -119,7 +116,7 @@ When the content processor detects a potential prompt-injection pattern, the res
 }
 ```
 
-A flat `warnings` array is also populated for backward compatibility (same information as formatted strings).
+
 
 **Detection categories:**
 
@@ -152,10 +149,10 @@ A flat `warnings` array is also populated for backward compatibility (same infor
 
 | Setting | Config key | Default | Description |
 |---|---|---|---|
-| Max response size | `FetchOptions:MaxResponseSizeBytes` | 5242880 (5 MB) | Maximum size of upstream response body |
-| Max redirects | `FetchOptions:MaxRedirects` | 5 | Maximum HTTP redirects to follow |
-| Rate limit window | `Safetch:RateLimit:WindowSeconds` | 60 | Rolling window in seconds |
-| Rate limit max requests | `Safetch:RateLimit:MaxRequests` | 100 | Max requests per session per window |
+| Max response size | `FetchOptions:MaxResponseBytes` | 10485760 (10 MB) | Maximum size of upstream response body |
+| Max redirects | `FetchOptions:MaxRedirects` | 3 | Maximum HTTP redirects to follow |
+| Fetch timeout | `FetchOptions:TimeoutSeconds` | 15 | Total timeout for a fetch call (seconds) |
+| Rate limit max requests | `Safetch:RateLimit:MaxRequestsPerHour` | 20 | Max requests per hour per GitHub user |
 
 ## Contributing
 

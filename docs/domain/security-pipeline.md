@@ -1,4 +1,4 @@
-**Scope**: `Safetch.Core` — Guards, Http
+﻿**Scope**: `Safetch.Core` — Guards, Http
 **Tags**: security, ssrf, guards, dns-pinning, ip-validation, domain, backend
 **Summary**: Design of the request guard pipeline and SafeHttpFetcher — SSRF prevention, IP validation, redirect safety, and body size enforcement.
 **See Also**: fetch-service.md, ../architecture/overview.md
@@ -49,7 +49,7 @@ A blocked guard returns `FetchResponse { Success=false, ErrorCode="BLOCKED" }` �
 
 This prevents **DNS rebinding attacks**: even if the initial DNS resolution passes `SsrfGuard`, a malicious server cannot cause a second DNS resolution (at connect time) to return a private IP — because `ConnectCallback` validates at the socket level.
 
-> Note: the session ID is not available inside `ConnectCallback` — this is a .NET constraint. Log correlation is limited at this point.
+
 
 ### Manual Redirect Loop
 
@@ -84,4 +84,4 @@ Unexpected exceptions from `SafeHttpFetcher` are caught in `FetchService` and al
 | `MaxRedirects` | 3 | Per fetch call (not per hop timeout) |
 | `TimeoutSeconds` | 15 | Applies to the full redirect chain, not per hop |
 
-Config section binding is not yet wired — defaults come from the `FetchOptions` class directly.
+FetchOptions is bound from the `"FetchOptions"` config section via `AddOptions<FetchOptions>().BindConfiguration("FetchOptions")`.
