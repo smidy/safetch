@@ -115,7 +115,6 @@ public class FetchService : IFetchService
             StatusCode = fetched.StatusCode ?? 0,
             ContentType = fetched.ContentType,
             ContentBytes = processorResult.Content.Length,
-            Warnings = processorResult.Warnings,
             InjectionWarnings = processorResult.InjectionWarnings
         };
     }

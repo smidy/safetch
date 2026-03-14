@@ -16,7 +16,6 @@ public class ReadableContentProcessor : IContentProcessor
 
     public Task<ProcessorResult> ProcessAsync(string content, ProcessingContext ctx, CancellationToken ct)
     {
-        var warnings = new List<string>();
         bool wantText = ctx.MimeType == "text/html+text";
         content = content.Replace("\r\n", "")
                      .Replace("\n", "")
@@ -25,14 +24,13 @@ public class ReadableContentProcessor : IContentProcessor
 
         if (!article.IsReadable)
         {
-            warnings.Add("Readable extraction failed — returning sanitised HTML");
             // Fallback: do basic tag strip for text mode, or return as-is
             var fallback = wantText ? StripTags(content) : content;
-            return Task.FromResult(new ProcessorResult(fallback, warnings, new List<InjectionWarning>()));
+            return Task.FromResult(new ProcessorResult(fallback, new List<InjectionWarning>()));
         }
 
         var extracted = wantText ? StripTags(article.Content) : article.Content;
-        return Task.FromResult(new ProcessorResult(extracted, warnings, new List<InjectionWarning>()));
+        return Task.FromResult(new ProcessorResult(extracted, new List<InjectionWarning>()));
     }
 
     private static string StripTags(string html)

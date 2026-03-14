@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Safetch.Core.Models;
+using Safetch.Core.Processing;
 using Safetch.Core.Services;
 using Xunit;
 
@@ -24,7 +25,7 @@ public class AuditingFetchServiceTests
     private static FetchRequest MakeRequest(string? sessionId = "test-session")
         => new FetchRequest { Url = "https://example.com", SessionId = sessionId };
 
-    private static FetchResponse MakeSuccess(string[]? warnings = null)
+    private static FetchResponse MakeSuccess(InjectionWarning[]? injectionWarnings = null)
         => new FetchResponse
         {
             Success = true,
@@ -33,7 +34,7 @@ public class AuditingFetchServiceTests
             StatusCode = 200,
             ContentType = "text/html",
             ContentBytes = 11,
-            Warnings = warnings ?? Array.Empty<string>()
+            InjectionWarnings = injectionWarnings ?? Array.Empty<InjectionWarning>()
         };
 
     private static FetchResponse MakeBlocked()
@@ -97,15 +98,20 @@ public class AuditingFetchServiceTests
     }
 
     [Fact]
-    public async Task FetchAsync_SuccessWithWarnings_LogsContentWarningPerWarning()
+    public async Task FetchAsync_SuccessWithInjectionWarnings_LogsContentWarningPerWarning()
     {
         var (sut, inner, logger) = CreateSut();
+        var warnings = new[]
+        {
+            new InjectionWarning("InstructionOverride", "ignore previous", InjectionSeverity.Medium),
+            new InjectionWarning("PersonaHijacking", "you are now", InjectionSeverity.High)
+        };
         inner.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
-             .ReturnsAsync(MakeSuccess(warnings: new[] { "warn1", "warn2" }));
+             .ReturnsAsync(MakeSuccess(injectionWarnings: warnings));
 
         await sut.FetchAsync(MakeRequest(), CancellationToken.None);
 
-        // 2 warnings → 2 Warning-level logs (plus possibly more from fetch.content_warning)
+        // 2 injection warnings → 2 Warning-level logs
         logger.Verify(
             x => x.Log(
                 LogLevel.Warning,

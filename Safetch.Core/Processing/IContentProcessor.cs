@@ -21,7 +21,6 @@ public interface IContentProcessor
 
 public record ProcessorResult(
     string Content,
-    IReadOnlyList<string> Warnings,
     IReadOnlyList<InjectionWarning> InjectionWarnings
 );
 

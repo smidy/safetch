@@ -16,7 +16,6 @@ public class ContentProcessorPipeline
 
     public async Task<ProcessorResult> RunAsync(string content, ProcessingContext ctx, CancellationToken ct)
     {
-        var warnings = new List<string>();
         var injectionWarnings = new List<InjectionWarning>();
         var currentContent = content;
 
@@ -31,10 +30,9 @@ public class ContentProcessorPipeline
 
             var result = await ordered.Processor.ProcessAsync(currentContent, ctx, ct);
             currentContent = result.Content;
-            warnings.AddRange(result.Warnings);
             injectionWarnings.AddRange(result.InjectionWarnings);
         }
 
-        return new ProcessorResult(currentContent, warnings, injectionWarnings);
+        return new ProcessorResult(currentContent, injectionWarnings);
     }
 }

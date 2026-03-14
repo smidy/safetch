@@ -79,12 +79,6 @@ public class InjectionPatternProcessor : IContentProcessor
             }
         }
 
-        var warnings = new List<string>(injectionWarnings.Count);
-        foreach (var w in injectionWarnings)
-        {
-            warnings.Add($"[{w.Category}/{w.Severity}] Pattern matched: '{w.PatternMatched}'");
-        }
-
-        return Task.FromResult(new ProcessorResult(content, warnings, injectionWarnings));
+        return Task.FromResult(new ProcessorResult(content, injectionWarnings));
     }
 }

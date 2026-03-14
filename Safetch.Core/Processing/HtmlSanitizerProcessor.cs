@@ -68,7 +68,7 @@ public class HtmlSanitizerProcessor : IContentProcessor
         }
 
         var resultHtml = doc.DocumentNode.OuterHtml;
-        return Task.FromResult(new ProcessorResult(resultHtml, new List<string>(), new List<InjectionWarning>()));
+        return Task.FromResult(new ProcessorResult(resultHtml, new List<InjectionWarning>()));
     }
 
     private static string NormalizeStyle(string style)

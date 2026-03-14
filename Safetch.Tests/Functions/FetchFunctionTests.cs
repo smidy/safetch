@@ -204,4 +204,37 @@ public class FetchFunctionTests
         var doc = JsonSerializer.Deserialize<JsonElement>(json);
         Assert.Equal("sess-123", doc.GetProperty("sessionId").GetString());
     }
+
+    [Fact]
+    public async Task Run_SuccessResponse_SerialisesCamelCase()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse
+            {
+                Success = true,
+                Url = "http://example.com",
+                Content = "hello",
+                StatusCode = 200,
+                SessionId = "s1"
+            });
+
+        var body = JsonSerializer.Serialize(new { url = "http://example.com" });
+        var result = await CreateSut(mock).Run(MakeRequest(body), new FakeFunctionContext());
+
+        var json = await ReadBody(result);
+        var doc = JsonSerializer.Deserialize<JsonElement>(json);
+
+        // camelCase keys must be present
+        Assert.True(doc.TryGetProperty("success", out _));
+        Assert.True(doc.TryGetProperty("content", out _));
+        Assert.True(doc.TryGetProperty("statusCode", out _));
+        Assert.True(doc.TryGetProperty("sessionId", out _));
+
+        // PascalCase keys must NOT be present
+        Assert.False(doc.TryGetProperty("Success", out _));
+        Assert.False(doc.TryGetProperty("Content", out _));
+        Assert.False(doc.TryGetProperty("Warnings", out _));
+        Assert.False(doc.TryGetProperty("InjectionWarnings", out _));
+    }
 }

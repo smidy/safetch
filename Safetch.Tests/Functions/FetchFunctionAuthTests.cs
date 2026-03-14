@@ -101,8 +101,7 @@ public class FetchFunctionAuthTests
             StatusCode = 200,
             ContentType = "text/html",
             Content = "hello",
-            SessionId = "s1",
-            Warnings = System.Array.Empty<string>()
+            SessionId = "s1"
         };
 
         var mockService = new Mock<IFetchService>();
@@ -152,8 +151,7 @@ public class FetchFunctionAuthTests
             StatusCode = 200,
             ContentType = "text/html",
             Content = "hello",
-            SessionId = "s1",
-            Warnings = System.Array.Empty<string>()
+            SessionId = "s1"
         };
         var mockService = new Mock<IFetchService>();
         mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<System.Threading.CancellationToken>()))

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -67,18 +67,20 @@ public class AuditingFetchService : IFetchService
                 status_code = response.StatusCode,
                 content_type = response.ContentType,
                 content_bytes = response.ContentBytes,
-                warning_count = response.Warnings.Count,
+                injection_warning_count = response.InjectionWarnings.Count,
                 duration_ms = sw.ElapsedMilliseconds
             });
 
-            foreach (var warning in response.Warnings)
+            foreach (var warning in response.InjectionWarnings)
             {
                 _logger.LogWarning("fetch.content_warning {@Event}", new
                 {
                     event_type = "fetch.content_warning",
                     session_id = request.SessionId,
                     url_host = GetHost(request.Url),
-                    warning
+                    category = warning.Category,
+                    pattern = warning.PatternMatched,
+                    severity = warning.Severity
                 });
             }
         }

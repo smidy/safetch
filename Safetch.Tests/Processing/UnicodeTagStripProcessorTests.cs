@@ -19,12 +19,12 @@ public class UnicodeTagStripProcessorTests
     }
 
     [Fact]
-    public async Task SetsWarningWhenStripped()
+    public async Task InjectionWarningsEmptyAfterStripping()
     {
+        // UnicodeTagStrip only strips characters — it does not produce injection warnings
         var content = "Hello\uDB40\uDC00World";
         var result = await _processor.ProcessAsync(content, new ProcessingContext("text/plain", "http://example.com"), default);
-        var warning = Assert.Single(result.Warnings);
-        Assert.Equal("Unicode Tag characters (U+E0000–U+E007F) were removed from content.", warning);
+        Assert.Empty(result.InjectionWarnings);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class UnicodeTagStripProcessorTests
         var content = "Hello World";
         var result = await _processor.ProcessAsync(content, new ProcessingContext("text/plain", "http://example.com"), default);
         Assert.Equal(content, result.Content);
-        Assert.Empty(result.Warnings);
+        Assert.Empty(result.InjectionWarnings);
     }
 
     [Fact]
@@ -41,6 +41,6 @@ public class UnicodeTagStripProcessorTests
     {
         var result = await _processor.ProcessAsync("", new ProcessingContext("text/plain", "http://example.com"), default);
         Assert.Equal("", result.Content);
-        Assert.Empty(result.Warnings);
+        Assert.Empty(result.InjectionWarnings);
     }
 }

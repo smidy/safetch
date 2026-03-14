@@ -16,6 +16,6 @@ public class HtmlToMarkdownProcessor : IContentProcessor
         };
         var converter = new ReverseMarkdown.Converter(config);
         var markdown = converter.Convert(content);
-        return Task.FromResult(new ProcessorResult(markdown, new List<string>(), new List<InjectionWarning>()));
+        return Task.FromResult(new ProcessorResult(markdown, new List<InjectionWarning>()));
     }
 }

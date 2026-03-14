@@ -17,14 +17,10 @@ public class UnicodeTagStripProcessor : IContentProcessor
         var matches = TagsBlock.Matches(content);
         if (matches.Count == 0)
         {
-            return Task.FromResult(new ProcessorResult(content, new List<string>(), new List<InjectionWarning>()));
+            return Task.FromResult(new ProcessorResult(content, new List<InjectionWarning>()));
         }
 
         var stripped = TagsBlock.Replace(content, "");
-        var warnings = new List<string>
-        {
-            "Unicode Tag characters (U+E0000–U+E007F) were removed from content."
-        };
-        return Task.FromResult(new ProcessorResult(stripped, warnings, new List<InjectionWarning>()));
+        return Task.FromResult(new ProcessorResult(stripped, new List<InjectionWarning>()));
     }
 }

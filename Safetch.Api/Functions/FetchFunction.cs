@@ -209,11 +209,16 @@ public class FetchFunction
         return response;
     }
 
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private static async Task WriteJsonResponseAsync<T>(HttpResponseData response, HttpStatusCode statusCode, T body)
     {
         response.StatusCode = statusCode;
         response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-        await response.WriteStringAsync(JsonSerializer.Serialize(body));
+        await response.WriteStringAsync(JsonSerializer.Serialize(body, JsonOptions));
     }
 
     private static string? ExtractBearerToken(HttpRequestData req)

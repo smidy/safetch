@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Moq;
 using Safetch.Core.Processing;
 using Xunit;
-using EmptyInjections = System.Collections.Generic.List<Safetch.Core.Processing.InjectionWarning>;
+
 
 namespace Safetch.Tests.Processing;
 
@@ -16,7 +16,7 @@ public class ContentProcessorPipelineTests
         var mockProcessor = new Mock<IContentProcessor>();
         mockProcessor.Setup(p => p.Name).Returns("Test");
         mockProcessor.Setup(p => p.ProcessAsync(It.IsAny<string>(), It.IsAny<ProcessingContext>(), It.IsAny<System.Threading.CancellationToken>()))
-            .ReturnsAsync(new ProcessorResult("processed", new List<string>(), new EmptyInjections()));
+            .ReturnsAsync(new ProcessorResult("processed", new List<InjectionWarning>()));
         
         var processors = new List<OrderedProcessor>
         {
@@ -39,7 +39,7 @@ public class ContentProcessorPipelineTests
         mockProcessor.Setup(p => p.Name).Returns("Star");
         mockProcessor.Setup(p => p.ProcessAsync(It.IsAny<string>(), It.IsAny<ProcessingContext>(), It.IsAny<System.Threading.CancellationToken>()))
             .Callback(() => callCount++)
-            .ReturnsAsync(new ProcessorResult("processed", new List<string>(), new EmptyInjections()));
+            .ReturnsAsync(new ProcessorResult("processed", new List<InjectionWarning>()));
         
         var processors = new List<OrderedProcessor>
         {
@@ -65,13 +65,13 @@ public class ContentProcessorPipelineTests
         starProcessor.Setup(p => p.Name).Returns("Star");
         starProcessor.Setup(p => p.ProcessAsync(It.IsAny<string>(), It.IsAny<ProcessingContext>(), It.IsAny<System.Threading.CancellationToken>()))
             .Callback(() => starCalled = true)
-            .ReturnsAsync(new ProcessorResult("star", new List<string>(), new EmptyInjections()));
+            .ReturnsAsync(new ProcessorResult("star", new List<InjectionWarning>()));
         
         var htmlProcessor = new Mock<IContentProcessor>();
         htmlProcessor.Setup(p => p.Name).Returns("Html");
         htmlProcessor.Setup(p => p.ProcessAsync(It.IsAny<string>(), It.IsAny<ProcessingContext>(), It.IsAny<System.Threading.CancellationToken>()))
             .Callback(() => htmlCalled = true)
-            .ReturnsAsync(new ProcessorResult("html", new List<string>(), new EmptyInjections()));
+            .ReturnsAsync(new ProcessorResult("html", new List<InjectionWarning>()));
         
         var processors = new List<OrderedProcessor>
         {
@@ -88,30 +88,33 @@ public class ContentProcessorPipelineTests
     }
 
     [Fact]
-    public async Task WarningsAccumulateAcrossProcessors()
+    public async Task InjectionWarningsAccumulateAcrossProcessors()
     {
+        var warning1 = new InjectionWarning("Cat1", "pattern1", InjectionSeverity.Medium);
+        var warning2 = new InjectionWarning("Cat2", "pattern2", InjectionSeverity.High);
+
         var processor1 = new Mock<IContentProcessor>();
         processor1.Setup(p => p.Name).Returns("P1");
         processor1.Setup(p => p.ProcessAsync(It.IsAny<string>(), It.IsAny<ProcessingContext>(), It.IsAny<System.Threading.CancellationToken>()))
-            .ReturnsAsync(new ProcessorResult("p1", new List<string> { "warning1" }, new EmptyInjections()));
-        
+            .ReturnsAsync(new ProcessorResult("p1", new List<InjectionWarning> { warning1 }));
+
         var processor2 = new Mock<IContentProcessor>();
         processor2.Setup(p => p.Name).Returns("P2");
         processor2.Setup(p => p.ProcessAsync(It.IsAny<string>(), It.IsAny<ProcessingContext>(), It.IsAny<System.Threading.CancellationToken>()))
-            .ReturnsAsync(new ProcessorResult("p2", new List<string> { "warning2" }, new EmptyInjections()));
-        
+            .ReturnsAsync(new ProcessorResult("p2", new List<InjectionWarning> { warning2 }));
+
         var processors = new List<OrderedProcessor>
         {
             new OrderedProcessor(1, "*", processor1.Object),
             new OrderedProcessor(2, "*", processor2.Object)
         };
         var pipeline = new ContentProcessorPipeline(processors);
-        
+
         var result = await pipeline.RunAsync("content", new ProcessingContext("text/plain", "http://example.com"), default);
-        
-        Assert.Equal(2, result.Warnings.Count);
-        Assert.Contains("warning1", result.Warnings);
-        Assert.Contains("warning2", result.Warnings);
+
+        Assert.Equal(2, result.InjectionWarnings.Count);
+        Assert.Contains(warning1, result.InjectionWarnings);
+        Assert.Contains(warning2, result.InjectionWarnings);
     }
 
     [Fact]
@@ -123,13 +126,13 @@ public class ContentProcessorPipelineTests
         processor1.Setup(p => p.Name).Returns("P1");
         processor1.Setup(p => p.ProcessAsync(It.IsAny<string>(), It.IsAny<ProcessingContext>(), It.IsAny<System.Threading.CancellationToken>()))
             .Callback(() => executionOrder.Add("P1"))
-            .ReturnsAsync(new ProcessorResult("p1", new List<string>(), new EmptyInjections()));
+            .ReturnsAsync(new ProcessorResult("p1", new List<InjectionWarning>()));
         
         var processor2 = new Mock<IContentProcessor>();
         processor2.Setup(p => p.Name).Returns("P2");
         processor2.Setup(p => p.ProcessAsync(It.IsAny<string>(), It.IsAny<ProcessingContext>(), It.IsAny<System.Threading.CancellationToken>()))
             .Callback(() => executionOrder.Add("P2"))
-            .ReturnsAsync(new ProcessorResult("p2", new List<string>(), new EmptyInjections()));
+            .ReturnsAsync(new ProcessorResult("p2", new List<InjectionWarning>()));
         
         var processors = new List<OrderedProcessor>
         {
