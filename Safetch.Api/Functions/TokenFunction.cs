@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
@@ -48,6 +49,7 @@ public class TokenFunction
 
     /// <summary>
     /// POST /api/token — issues or retrieves a long-lived API key for the authenticated user.
+    /// Optional query parameter "regenerate=true" deletes any existing key before generating a new one.
     /// </summary>
     [Function("TokenPost")]
     public async Task<HttpResponseData> PostToken(
@@ -58,9 +60,30 @@ public class TokenFunction
         if (identity == null)
             return await ErrorAsync(req, HttpStatusCode.Unauthorized, "Authentication required.", "UNAUTHENTICATED");
 
-        // Return existing key if one already exists (idempotent)
+        // Parse query parameters
+        var query = req.Url.Query.TrimStart('?');
+        var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var idx = part.IndexOf('=');
+            if (idx < 0) continue;
+            var key = Uri.UnescapeDataString(part[..idx]);
+            var val = Uri.UnescapeDataString(part[(idx + 1)..]);
+            parameters[key] = val;
+        }
+
+        bool regenerate = parameters.TryGetValue("regenerate", out var regenerateValue) &&
+                          string.Equals(regenerateValue, "true", StringComparison.OrdinalIgnoreCase);
+
+        if (regenerate)
+        {
+            // Delete existing key if any
+            await _store.DeleteKeyAsync(identity.UserId, executionContext.CancellationToken);
+        }
+
+        // Return existing key if one already exists and we are not regenerating
         var existing = await _store.GetKeyAsync(identity.UserId, executionContext.CancellationToken);
-        if (existing != null)
+        if (existing != null && !regenerate)
             return await JsonAsync(req, HttpStatusCode.OK, new { apiKey = existing, githubLogin = identity.Login, created = false });
 
         var newKey = await _store.CreateKeyAsync(identity.UserId, identity.Login, executionContext.CancellationToken);

@@ -83,4 +83,24 @@ public class TableApiKeyStore : IApiKeyStore
             return null;
         }
     }
+    public async Task DeleteKeyAsync(string githubUserId, CancellationToken ct = default)
+    {
+        var existingKey = await GetKeyAsync(githubUserId, ct);
+        if (existingKey == null)
+        {
+            // No key to delete
+            return;
+        }
+
+        try
+        {
+            await _table.DeleteEntityAsync("github", githubUserId, cancellationToken: ct);
+            await _table.DeleteEntityAsync("apikey", existingKey, cancellationToken: ct);
+            _logger.LogInformation("Deleted API key for GitHub user {UserId}", githubUserId);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            // Already deleted, ignore
+        }
+    }
 }

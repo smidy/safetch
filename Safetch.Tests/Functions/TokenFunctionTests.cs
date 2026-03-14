@@ -188,4 +188,29 @@ public class TokenFunctionTests
         Assert.Equal("dev-generated-key", body.GetProperty("apiKey").GetString());
         Assert.Equal("local-dev", body.GetProperty("githubLogin").GetString());
     }
+    [Fact]
+    public async Task PostToken_RegenerateTrue_DeletesOldKeyAndReturnsNew()
+    {
+        var ctx = new FakeFunctionContext();
+        var req = new FakeHttpRequestData(ctx, url: "http://localhost/api/token?regenerate=true");
+        req.Headers.Add("x-ms-client-principal", BuildPrincipalHeader("123", "octocat"));
+        _mockStore.Setup(x => x.GetKeyAsync("123", It.IsAny<System.Threading.CancellationToken>()))
+            .ReturnsAsync("oldkey");
+        _mockStore.Setup(x => x.DeleteKeyAsync("123", It.IsAny<System.Threading.CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _mockStore.Setup(x => x.CreateKeyAsync("123", "octocat", It.IsAny<System.Threading.CancellationToken>()))
+            .ReturnsAsync("newkey");
+        var function = new TokenFunction(_mockStore.Object, ProdEnv, NullLog);
+
+        var response = await function.PostToken(req, ctx);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await ReadBody(response);
+        Assert.Equal("newkey", body.GetProperty("apiKey").GetString());
+        Assert.Equal("octocat", body.GetProperty("githubLogin").GetString());
+        Assert.True(body.GetProperty("created").GetBoolean());
+        // Verify DeleteKeyAsync was called
+        _mockStore.Verify(x => x.DeleteKeyAsync("123", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+    }
+
 }

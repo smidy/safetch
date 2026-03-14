@@ -20,4 +20,9 @@ public interface IApiKeyStore
     /// Looks up the GitHub user ID associated with an API key. Returns null if not found.
     /// </summary>
     Task<string?> ValidateKeyAsync(string apiKey, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes the existing API key for a GitHub user, if one exists.
+    /// </summary>
+    Task DeleteKeyAsync(string githubUserId, CancellationToken ct = default);
 }

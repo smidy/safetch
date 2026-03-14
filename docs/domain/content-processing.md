@@ -20,7 +20,6 @@ record ProcessingContext(string MimeType, string SourceUrl);
 
 record ProcessorResult(
     string Content,
-    IReadOnlyList<string> Warnings,                    // backward-compat flat strings
     IReadOnlyList<InjectionWarning> InjectionWarnings  // structured, per-match
 );
 
@@ -42,10 +41,10 @@ services.AddContentProcessor<T>(contentType: "text/html", order: 1);
 
 | Order | Name | Affinity | Behaviour |
 |---|---|---|---|
-| 1 | `ReadableContent` | `text/html+readable`, `text/html+text`, `text/html+markdown` | Extracts primary article body via SmartReader (Mozilla Readability). `readable` returns clean HTML; `text` strips tags to plain text; `markdown` passes extracted HTML to downstream processors. Falls back with warning if `IsReadable = false`. |
+| 1 | `ReadableContent` | `text/html+readable`, `text/html+text`, `text/html+markdown` | Extracts primary article body via SmartReader (Mozilla Readability). `readable` returns clean HTML; `text` strips tags to plain text; `markdown` passes extracted HTML to downstream processors. Falls back to sanitised content if `IsReadable = false`. |
 | 1 | `HtmlSanitizer` | `text/html`, `text/html+markdown` | Removes CSS-hidden elements, `data-*` attributes, `<svg>`, `<meta http-equiv>` using HtmlAgilityPack |
 | 2 | `HtmlToMarkdown` | `text/html`, `text/html+markdown` | Converts HTML to Markdown using ReverseMarkdown |
-| 3 | `UnicodeTagStrip` | `*` | Removes Unicode Tags block characters (U+E0000–U+E007F) via surrogate-pair regex; emits warning if found |
+| 3 | `UnicodeTagStrip` | `*` | Removes Unicode Tags block characters (U+E0000–U+E007F) via surrogate-pair regex |
 | 4 | `InjectionPattern` | `*` | Scans for known prompt injection phrases; **detection only** — does not modify content; emits one warning per match |
 | 5 | `Spotlighting` | `*` | Wraps final content in `[BEGIN UNTRUSTED EXTERNAL CONTENT ...]` / `[END UNTRUSTED EXTERNAL CONTENT]` boundary markers |
 
@@ -85,13 +84,13 @@ Detection-only by design. Removal is easily bypassed by split-word attacks and c
 | `MemoryPoisoning` | High | Phrases designed to write persistent instructions into AI memory (MITRE AML.T0080.000) |
 | `JailbreakFraming` | Medium | Well-known jailbreak triggers (DAN, god mode, developer mode, etc.) |
 
-Structured warnings are surfaced via `FetchResponse.InjectionWarnings` (`IReadOnlyList<InjectionWarning>`). The flat `FetchResponse.Warnings` string list is also populated for backward compatibility.
+Structured warnings are surfaced via `FetchResponse.InjectionWarnings` (`IReadOnlyList<InjectionWarning>`), serialised as `injectionWarnings` in the JSON response.
 
 **Arms-race limitation**: Static pattern matching raises the bar but cannot close the gap against adaptive or encoded attacks. Treat warnings as signals to scrutinise, not proof of safety when absent.
 
 ## Warnings contract
 
-`FetchResponse.Warnings` accumulates all warnings from all processors as flat strings. It is always present in the response as an array — never omitted, even when empty (`[]`). `FetchResponse.InjectionWarnings` carries the structured injection warnings separately. Callers (e.g. `WebFetchTool`) should log or surface both for scrutiny.
+`FetchResponse.InjectionWarnings` accumulates all structured injection warnings from all processors. It is always present in the response as an array — never omitted, even when empty (`[]`). Callers (e.g. `WebFetchTool`) should log or surface these warnings for scrutiny.
 
 ## Unicode Tag surrogate encoding
 
