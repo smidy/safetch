@@ -194,6 +194,55 @@ public class FetchFunctionTests
 
 
     [Fact]
+    public async Task Run_InvalidIdentityKey_TooLong_Returns400()
+    {
+        var body = JsonSerializer.Serialize(new { url = "http://example.com", identityKey = "toolongkey" });
+        var result = await CreateSut().Run(MakeRequest(body), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        var json = await ReadBody(result);
+        Assert.Contains("identityKey", json);
+    }
+
+    [Fact]
+    public async Task Run_InvalidIdentityKey_NonAscii_Returns400()
+    {
+        var body = JsonSerializer.Serialize(new { url = "http://example.com", identityKey = "k\u00e9y" });
+        var result = await CreateSut().Run(MakeRequest(body), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Run_ValidIdentityKey_PassedToFetchService()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = true, Url = "http://example.com", Content = "hi", StatusCode = 200, SpotlightingKey = "a3f1c92b" });
+
+        var body = JsonSerializer.Serialize(new { url = "http://example.com", identityKey = "a3f1c92b" });
+        var result = await CreateSut(mock).Run(MakeRequest(body), new FakeFunctionContext());
+
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        mock.Verify(s => s.FetchAsync(
+            It.Is<FetchRequest>(r => r.IdentityKey == "a3f1c92b"), default), Times.Once);
+    }
+
+    [Fact]
+    public async Task Run_SuccessResponse_IncludesSpotlightingKey()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = true, Url = "http://example.com", Content = "hi", StatusCode = 200, SpotlightingKey = "a3f1c92b" });
+
+        var body = JsonSerializer.Serialize(new { url = "http://example.com", identityKey = "a3f1c92b" });
+        var result = await CreateSut(mock).Run(MakeRequest(body), new FakeFunctionContext());
+
+        var json = await ReadBody(result);
+        var doc = JsonSerializer.Deserialize<JsonElement>(json);
+        Assert.True(doc.TryGetProperty("spotlightingKey", out var keyProp));
+        Assert.Equal("a3f1c92b", keyProp.GetString());
+    }
+
+    [Fact]
     public async Task Run_SuccessResponse_SerialisesCamelCase()
     {
         var mock = new Mock<IFetchService>();

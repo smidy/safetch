@@ -100,7 +100,11 @@ public class FetchService : IFetchService
             };
         }
 
-        var context = new ProcessingContext(effectiveMimeType, request.Url!);
+        var effectiveKey = string.IsNullOrWhiteSpace(request.IdentityKey)
+            ? Guid.NewGuid().ToString("N")[..8]
+            : request.IdentityKey;
+
+        var context = new ProcessingContext(effectiveMimeType, request.Url!, effectiveKey);
         var processorResult = await _pipeline.RunAsync(content, context, ct);
         
         return new FetchResponse
@@ -111,6 +115,7 @@ public class FetchService : IFetchService
             StatusCode = fetched.StatusCode ?? 0,
             ContentType = fetched.ContentType,
             ContentBytes = processorResult.Content.Length,
+            SpotlightingKey = effectiveKey,
             InjectionWarnings = processorResult.InjectionWarnings
         };
     }

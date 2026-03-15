@@ -65,6 +65,7 @@ public class FetchFunction
 
         // Deserialize request body
         FetchRequest? fetchRequest;
+        string? rawIdentityKey;
         try
         {
             var dto = await JsonSerializer.DeserializeAsync<FetchRequestDto>(
@@ -72,6 +73,7 @@ public class FetchFunction
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
             );
 
+            rawIdentityKey = dto?.IdentityKey;
             fetchRequest = new FetchRequest
             {
                 Url = dto?.Url,
@@ -90,6 +92,14 @@ public class FetchFunction
             await WriteJsonResponseAsync(response, HttpStatusCode.BadRequest, new { error = "url is required", errorCode = (string?)null });
             return response;
         }
+
+        // Validate identityKey (if provided): max 8 printable ASCII characters
+        if (!string.IsNullOrEmpty(rawIdentityKey) && !IsValidIdentityKey(rawIdentityKey))
+        {
+            await WriteJsonResponseAsync(response, HttpStatusCode.BadRequest, new { error = "identityKey must be 8 printable ASCII characters or fewer", errorCode = (string?)null });
+            return response;
+        }
+        fetchRequest.IdentityKey = rawIdentityKey;
 
         // FetchService never throws for URL/guard failures — it returns Success=false
         FetchResponse fetchResponse;
@@ -118,7 +128,7 @@ public class FetchFunction
         return response;
     }
 
-    private record FetchRequestDto(string? Url, string? Mode);
+    private record FetchRequestDto(string? Url, string? Mode, string? IdentityKey);
 
     private static ResponseMode ParseMode(string? mode) => mode?.ToLowerInvariant() switch
     {
@@ -174,6 +184,7 @@ public class FetchFunction
 
         parameters.TryGetValue("url", out var url);
         parameters.TryGetValue("mode", out var modeStr);
+        parameters.TryGetValue("identityKey", out var identityKey);
 
         // Validate: url must be present, non-empty, and a valid absolute HTTP/HTTPS URI
         if (string.IsNullOrWhiteSpace(url)
@@ -185,10 +196,19 @@ public class FetchFunction
             return response;
         }
 
+        // Validate identityKey (if provided): max 8 printable ASCII characters
+        if (!string.IsNullOrEmpty(identityKey) && !IsValidIdentityKey(identityKey))
+        {
+            await WriteJsonResponseAsync(response, HttpStatusCode.BadRequest,
+                new { error = "identityKey must be 8 printable ASCII characters or fewer", errorCode = (string?)null });
+            return response;
+        }
+
         var fetchRequest = new FetchRequest
         {
             Url = url,
-            Mode = ParseMode(modeStr)
+            Mode = ParseMode(modeStr),
+            IdentityKey = identityKey
         };
 
         FetchResponse fetchResponse;
@@ -226,6 +246,17 @@ public class FetchFunction
         response.StatusCode = statusCode;
         response.Headers.Add("Content-Type", "application/json; charset=utf-8");
         await response.WriteStringAsync(JsonSerializer.Serialize(body, JsonOptions));
+    }
+
+    private static bool IsValidIdentityKey(string key)
+    {
+        if (key.Length > 8) return false;
+        foreach (var c in key)
+        {
+            // Must be printable ASCII: 0x20 (space) to 0x7E (~)
+            if (c < 0x20 || c > 0x7E) return false;
+        }
+        return true;
     }
 
     private static string? ExtractBearerToken(HttpRequestData req)

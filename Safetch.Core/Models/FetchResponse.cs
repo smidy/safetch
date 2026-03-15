@@ -13,6 +13,7 @@ public class FetchResponse
     public long? ContentBytes { get; init; }
     public string? ErrorCode { get; init; }    // "BLOCKED", "FETCH_FAILED", etc.
     public string? ErrorMessage { get; init; }
+    public string? SpotlightingKey { get; init; }
 
     public IReadOnlyList<InjectionWarning> InjectionWarnings { get; init; } = System.Array.Empty<InjectionWarning>();
 }

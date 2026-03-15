@@ -141,6 +141,29 @@ public class FetchFunctionGetTests
         var result = await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com"), new FakeFunctionContext());
         Assert.Equal(HttpStatusCode.BadGateway, result.StatusCode);
     }
+
+    [Fact]
+    public async Task RunGet_InvalidIdentityKey_TooLong_Returns400()
+    {
+        var result = await CreateSut().RunGet(MakeGetRequest("url=https://example.com&identityKey=toolongkey"), new FakeFunctionContext());
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        var json = await ReadBody(result);
+        Assert.Contains("identityKey", json);
+    }
+
+    [Fact]
+    public async Task RunGet_ValidIdentityKey_PassedToFetchService()
+    {
+        var mock = new Mock<IFetchService>();
+        mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
+            .ReturnsAsync(new FetchResponse { Success = true, Url = "https://example.com", Content = "hi", StatusCode = 200, SpotlightingKey = "a3f1c92b" });
+
+        var result = await CreateSut(mock).RunGet(MakeGetRequest("url=https://example.com&identityKey=a3f1c92b"), new FakeFunctionContext());
+
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        mock.Verify(s => s.FetchAsync(
+            It.Is<FetchRequest>(r => r.IdentityKey == "a3f1c92b"), default), Times.Once);
+    }
 }
 
 public class FetchFunctionGetParsingTests
