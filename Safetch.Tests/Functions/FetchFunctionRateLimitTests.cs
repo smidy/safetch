@@ -1,16 +1,17 @@
-﻿using System;
-using System.Net;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Microsoft.Azure.Functions.Worker.Http;
+﻿using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Safetch.Api.Functions;
 using Safetch.Core.Auth;
+using Safetch.Core.Guards;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
-using Microsoft.Extensions.Options;
-using Safetch.Core.Guards;
 using Safetch.Tests.Fakes;
+using System;
+using System.Net;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Safetch.Tests.Functions;
@@ -50,7 +51,7 @@ public class FetchFunctionRateLimitTests
         var mockRateLimiter = RateLimiterThatReturns(false, 21, 20);
 
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()));
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()), Mock.Of<ILogger<FetchFunction>>());
 
         var response = await function.Run(req, ctx);
 
@@ -74,7 +75,7 @@ public class FetchFunctionRateLimitTests
         var mockRateLimiter = RateLimiterThatReturns(false, 21, 20);
 
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()));
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()), Mock.Of<ILogger<FetchFunction>>());
 
         var response = await function.Run(req, ctx);
 
@@ -96,7 +97,7 @@ public class FetchFunctionRateLimitTests
         var mockRateLimiter = RateLimiterThatReturns(false, 21, 20);
 
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()));
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()), Mock.Of<ILogger<FetchFunction>>());
 
         var response = await function.RunGet(req, ctx);
 
@@ -122,7 +123,7 @@ public class FetchFunctionRateLimitTests
         mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FetchResponse { Success = true, Url = "https://example.com", StatusCode = 200, Content = "" });
 
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv, Options.Create(new RateLimitOptions()));
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv, Options.Create(new RateLimitOptions()), Mock.Of<ILogger<FetchFunction>>());
 
         await function.Run(req, ctx);
 
@@ -145,7 +146,7 @@ public class FetchFunctionRateLimitTests
         mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FetchResponse { Success = true, Url = "https://example.com", StatusCode = 200, Content = "" });
 
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv, Options.Create(new RateLimitOptions()));
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv, Options.Create(new RateLimitOptions()), Mock.Of<ILogger<FetchFunction>>());
 
         await function.RunGet(req, ctx);
 
@@ -169,7 +170,7 @@ public class FetchFunctionRateLimitTests
         mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FetchResponse { Success = true });
 
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()));
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()), Mock.Of<ILogger<FetchFunction>>());
 
         await function.Run(req, ctx);
 

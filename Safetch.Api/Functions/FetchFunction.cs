@@ -7,11 +7,8 @@ using Safetch.Core.Auth;
 using Safetch.Core.Guards;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
-using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace Safetch.Api.Functions;
 

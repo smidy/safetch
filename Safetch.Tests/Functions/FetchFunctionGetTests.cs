@@ -1,17 +1,15 @@
-﻿using System.IO;
-using System.Net;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Microsoft.Azure.Functions.Worker.Http;
+﻿using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Safetch.Api.Functions;
 using Safetch.Core.Auth;
+using Safetch.Core.Guards;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
-using Microsoft.Extensions.Options;
-using Safetch.Core.Guards;
 using Safetch.Tests.Fakes;
-using Xunit;
+using System.Net;
+using System.Text.Json;
 
 namespace Safetch.Tests.Functions;
 
@@ -42,7 +40,7 @@ public class FetchFunctionGetTests
     {
         mock ??= new Mock<IFetchService>();
         store ??= AuthorizedStore();
-        return new FetchFunction(mock.Object, store.Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
+        return new FetchFunction(mock.Object, store.Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()), Mock.Of<ILogger<FetchFunction>>());
     }
 
     private static FakeHttpRequestData MakeGetRequest(string queryString = "")
@@ -188,7 +186,7 @@ public class FetchFunctionGetParsingTests
     }
 
     private static FetchFunction CreateSut(Mock<IFetchService> mock, Mock<IApiKeyStore>? store = null)
-        => new FetchFunction(mock.Object, (store ?? AuthorizedStore()).Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
+        => new FetchFunction(mock.Object, (store ?? AuthorizedStore()).Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()), Mock.Of<ILogger<FetchFunction>>());
 
     private static FakeHttpRequestData MakeGetRequest(string queryString = "")
     {
@@ -253,7 +251,7 @@ public class FetchFunctionGetParsingTests
         mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
             .ReturnsAsync(new FetchResponse { Success = true });
 
-        var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
+        var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()), Mock.Of<ILogger<FetchFunction>>());
         var req = new FakeHttpRequestData(
             new FakeFunctionContext(),
             body: """{"url":"https://example.com","mode":"markdown"}""",
