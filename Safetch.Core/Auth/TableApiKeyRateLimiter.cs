@@ -28,10 +28,14 @@ public class TableApiKeyRateLimiter : IApiKeyRateLimiter
 
     public async Task<RateLimitResult> CheckAndIncrementAsync(string callerIdentity, CancellationToken ct = default)
     {
-        var windowKey = DateTimeOffset.UtcNow.ToString("yyyyMMddHH");
+        var now = DateTimeOffset.UtcNow;
+        var windowStart = new DateTimeOffset(
+            now.UtcDateTime - TimeSpan.FromTicks(now.UtcDateTime.Ticks % _options.Window.Ticks),
+            TimeSpan.Zero);
+        var windowKey = windowStart.ToUnixTimeSeconds().ToString();
         var partitionKey = "ratelimit";
         var rowKey = $"{callerIdentity}:{windowKey}";
-        var windowResetsAt = DateTimeOffset.UtcNow.Date + TimeSpan.FromHours(DateTimeOffset.UtcNow.Hour + 1);
+        var windowResetsAt = windowStart + _options.Window;
 
         // Step 1: Try to read existing entity
         try
