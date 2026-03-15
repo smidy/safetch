@@ -36,13 +36,15 @@ Safetch defines these keys for local development:
 |-----|-------|---------|
 | `AzureWebJobsStorage` | `UseDevelopmentStorage=true` | Enables local Storage Emulator |
 | `FUNCTIONS_WORKER_RUNTIME` | `dotnet-isolated` | Required for .NET 9 isolated worker |
-| `Safetch:RateLimit:Enabled` | `false` | Disables rate limiting locally (easier testing) |
+| `Safetch:RateLimit:MaxFetchesPerWindow` | `100` | Max fetch requests per window per caller identity (Development: in-memory, fixed "local-dev" identity; Production: Azure Table Storage per GitHub user ID) |
 | `Safetch:Telemetry:LogLevel` | `Debug` | Enables detailed telemetry during local debugging |
 | `FetchOptions:MaxResponseBytes` | `10485760` | Max response body size in bytes (default 10 MB) |
 | `FetchOptions:MaxRedirects` | `3` | Max HTTP redirects before the request is aborted |
 | `FetchOptions:TimeoutSeconds` | `15` | Per-request HTTP timeout in seconds |
 
 > 🔐 `local.settings.json` is git-ignored. Never commit secrets here.
+
+> 💡 Rate limiting is **active in all environments**. In Development, `InMemoryRateLimiter` is used (no Azure Storage required). In Production, `TableApiKeyRateLimiter` persists counters in Azure Table Storage.
 
 ---
 

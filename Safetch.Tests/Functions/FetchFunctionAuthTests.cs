@@ -6,6 +6,8 @@ using Safetch.Api.Functions;
 using Safetch.Core.Auth;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
+using Microsoft.Extensions.Options;
+using Safetch.Core.Guards;
 using Safetch.Tests.Fakes;
 using Xunit;
 
@@ -39,7 +41,7 @@ public class FetchFunctionAuthTests
         var req = new FakeHttpRequestData(ctx);
         var mockStore = new Mock<IApiKeyStore>();
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, ProdEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
 
         var response = await function.Run(req, ctx);
 
@@ -58,7 +60,7 @@ public class FetchFunctionAuthTests
         mockStore.Setup(x => x.ValidateKeyAsync("invalid-token", It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync((string?)null);
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, ProdEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
 
         var response = await function.Run(req, ctx);
 
@@ -74,7 +76,7 @@ public class FetchFunctionAuthTests
         var req = new FakeHttpRequestData(ctx, url: "http://localhost/api/fetch?url=https%3A%2F%2Fexample.com");
         var mockStore = new Mock<IApiKeyStore>();
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, ProdEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
 
         var response = await function.RunGet(req, ctx);
 
@@ -107,7 +109,7 @@ public class FetchFunctionAuthTests
         mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync(successResponse);
 
-        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, ProdEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
 
         var response = await function.RunGet(req, ctx);
 
@@ -124,7 +126,7 @@ public class FetchFunctionAuthTests
         var req = new FakeHttpRequestData(ctx); // no auth header, empty body
         var mockStore = new Mock<IApiKeyStore>();
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, new Mock<IApiKeyRateLimiter>().Object, DevEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, DevEnv, Options.Create(new RateLimitOptions()));
 
         var response = await function.Run(req, ctx);
 
@@ -155,7 +157,7 @@ public class FetchFunctionAuthTests
         mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<System.Threading.CancellationToken>()))
             .ReturnsAsync(successResponse);
 
-        var function = new FetchFunction(mockService.Object, mockStore.Object, new Mock<IApiKeyRateLimiter>().Object, DevEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, PermissiveRateLimiter().Object, DevEnv, Options.Create(new RateLimitOptions()));
 
         var response = await function.RunGet(req, ctx);
 

@@ -60,7 +60,11 @@ var host = new HostBuilder()
             return tableClient;
         });
         services.AddSingleton<IApiKeyStore, TableApiKeyStore>();
-        services.AddSingleton<IApiKeyRateLimiter, TableApiKeyRateLimiter>();
+
+        if (context.HostingEnvironment.IsDevelopment())
+            services.AddSingleton<IApiKeyRateLimiter, InMemoryRateLimiter>();
+        else
+            services.AddSingleton<IApiKeyRateLimiter, TableApiKeyRateLimiter>();
 
     })
     .Build();

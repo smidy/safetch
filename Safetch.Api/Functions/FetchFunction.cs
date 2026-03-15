@@ -9,6 +9,8 @@ using Microsoft.Extensions.Hosting;
 using Safetch.Core.Auth;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
+using Microsoft.Extensions.Options;
+using Safetch.Core.Guards;
 
 namespace Safetch.Api.Functions;
 
@@ -18,13 +20,15 @@ public class FetchFunction
     private readonly IApiKeyStore _apiKeyStore;
     private readonly IApiKeyRateLimiter _rateLimiter;
     private readonly bool _isDevelopment;
+    private readonly RateLimitOptions _rateLimitOptions;
 
-    public FetchFunction(IFetchService fetchService, IApiKeyStore apiKeyStore, IApiKeyRateLimiter rateLimiter, IHostEnvironment environment)
+    public FetchFunction(IFetchService fetchService, IApiKeyStore apiKeyStore, IApiKeyRateLimiter rateLimiter, IHostEnvironment environment, IOptions<RateLimitOptions> rateLimitOptions)
     {
         _fetchService = fetchService ?? throw new ArgumentNullException(nameof(fetchService));
         _apiKeyStore = apiKeyStore ?? throw new ArgumentNullException(nameof(apiKeyStore));
         _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
         _isDevelopment = environment?.IsDevelopment() ?? false;
+        _rateLimitOptions = rateLimitOptions.Value;
     }
 
     [Function("Fetch")]
@@ -34,26 +38,29 @@ public class FetchFunction
     {
         var response = req.CreateResponse();
 
-        // Validate API key (bypassed in Development environment)
+        // Auth: bypassed in Development
+        string? githubUserId = null;
         if (!_isDevelopment)
         {
             var token = ExtractBearerToken(req);
-            var githubUserId = token == null ? null : await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken);
+            githubUserId = token == null ? null : await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken);
             if (githubUserId == null)
             {
                 await WriteJsonResponseAsync(response, HttpStatusCode.Unauthorized, new { error = "A valid API key is required. Obtain one at /api/token.", errorCode = "UNAUTHORIZED" });
                 return response;
             }
+        }
 
-            var rateLimit = await _rateLimiter.CheckAndIncrementAsync(githubUserId, executionContext.CancellationToken);
-            if (!rateLimit.Allowed)
-            {
-                var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
-                response.Headers.Add("Retry-After", retryAfter.ToString());
-                await WriteJsonResponseAsync(response, HttpStatusCode.TooManyRequests,
-                    new { error = "Rate limit exceeded. Maximum 20 requests per hour.", errorCode = "RATE_LIMITED" });
-                return response;
-            }
+        // Rate limiting: always enforced — in Development, use fixed local identity
+        var identityForRateLimit = githubUserId ?? "local-dev";
+        var rateLimit = await _rateLimiter.CheckAndIncrementAsync(identityForRateLimit, executionContext.CancellationToken);
+        if (!rateLimit.Allowed)
+        {
+            var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
+            response.Headers.Add("Retry-After", retryAfter.ToString());
+            await WriteJsonResponseAsync(response, HttpStatusCode.TooManyRequests,
+                new { error = $"Rate limit exceeded. Maximum {_rateLimitOptions.MaxFetchesPerWindow} requests per hour.", errorCode = "RATE_LIMITED" });
+            return response;
         }
 
         // Deserialize request body
@@ -128,26 +135,29 @@ public class FetchFunction
     {
         var response = req.CreateResponse();
 
-        // Validate API key (bypassed in Development environment)
+        // Auth: bypassed in Development
+        string? githubUserId = null;
         if (!_isDevelopment)
         {
             var token = ExtractBearerToken(req);
-            var githubUserId = token == null ? null : await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken);
+            githubUserId = token == null ? null : await _apiKeyStore.ValidateKeyAsync(token, executionContext.CancellationToken);
             if (githubUserId == null)
             {
                 await WriteJsonResponseAsync(response, HttpStatusCode.Unauthorized, new { error = "A valid API key is required. Obtain one at /api/token.", errorCode = "UNAUTHORIZED" });
                 return response;
             }
+        }
 
-            var rateLimit = await _rateLimiter.CheckAndIncrementAsync(githubUserId, executionContext.CancellationToken);
-            if (!rateLimit.Allowed)
-            {
-                var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
-                response.Headers.Add("Retry-After", retryAfter.ToString());
-                await WriteJsonResponseAsync(response, HttpStatusCode.TooManyRequests,
-                    new { error = "Rate limit exceeded. Maximum 20 requests per hour.", errorCode = "RATE_LIMITED" });
-                return response;
-            }
+        // Rate limiting: always enforced — in Development, use fixed local identity
+        var identityForRateLimit = githubUserId ?? "local-dev";
+        var rateLimit = await _rateLimiter.CheckAndIncrementAsync(identityForRateLimit, executionContext.CancellationToken);
+        if (!rateLimit.Allowed)
+        {
+            var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
+            response.Headers.Add("Retry-After", retryAfter.ToString());
+            await WriteJsonResponseAsync(response, HttpStatusCode.TooManyRequests,
+                new { error = $"Rate limit exceeded. Maximum {_rateLimitOptions.MaxFetchesPerWindow} requests per hour.", errorCode = "RATE_LIMITED" });
+            return response;
         }
 
         // Parse query parameters manually — System.Web is not reliably available in isolated worker

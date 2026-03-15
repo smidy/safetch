@@ -10,6 +10,8 @@ using Safetch.Api.Functions;
 using Safetch.Core.Auth;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
+using Microsoft.Extensions.Options;
+using Safetch.Core.Guards;
 using Safetch.Tests.Fakes;
 using Xunit;
 
@@ -41,7 +43,7 @@ public class FetchFunctionTests
     {
         mock ??= new Mock<IFetchService>();
         store ??= AuthorizedStore();
-        return new FetchFunction(mock.Object, store.Object, PermissiveRateLimiter().Object, ProdEnv);
+        return new FetchFunction(mock.Object, store.Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
     }
 
     // Creates a POST request with the valid bearer token already set
@@ -167,7 +169,7 @@ public class FetchFunctionTests
         [Fact]
         public async Task Run_InvalidJson_ErrorResponseIncludesErrorCode()
         {
-            var sut = new FetchFunction(new Mock<IFetchService>().Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv);
+            var sut = new FetchFunction(new Mock<IFetchService>().Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
             var result = await sut.Run(MakeRequest("not json"), new FakeFunctionContext());
             var body = await ReadJsonBody(result);
             Assert.True(body.TryGetProperty("error", out _));
@@ -181,7 +183,7 @@ public class FetchFunctionTests
             mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
                 .ReturnsAsync(new FetchResponse { Success = false, ErrorCode = "BLOCKED", ErrorMessage = "bad url" });
 
-            var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv);
+            var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
             var result = await sut.Run(MakeRequest($"{{\u0022url\u0022:\u0022http://example.com\u0022}}"), new FakeFunctionContext());
             var body = await ReadJsonBody(result);
 

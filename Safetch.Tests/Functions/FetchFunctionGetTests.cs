@@ -8,6 +8,8 @@ using Safetch.Api.Functions;
 using Safetch.Core.Auth;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
+using Microsoft.Extensions.Options;
+using Safetch.Core.Guards;
 using Safetch.Tests.Fakes;
 using Xunit;
 
@@ -40,7 +42,7 @@ public class FetchFunctionGetTests
     {
         mock ??= new Mock<IFetchService>();
         store ??= AuthorizedStore();
-        return new FetchFunction(mock.Object, store.Object, PermissiveRateLimiter().Object, ProdEnv);
+        return new FetchFunction(mock.Object, store.Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
     }
 
     private static FakeHttpRequestData MakeGetRequest(string queryString = "")
@@ -163,7 +165,7 @@ public class FetchFunctionGetParsingTests
     }
 
     private static FetchFunction CreateSut(Mock<IFetchService> mock, Mock<IApiKeyStore>? store = null)
-        => new FetchFunction(mock.Object, (store ?? AuthorizedStore()).Object, PermissiveRateLimiter().Object, ProdEnv);
+        => new FetchFunction(mock.Object, (store ?? AuthorizedStore()).Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
 
     private static FakeHttpRequestData MakeGetRequest(string queryString = "")
     {
@@ -228,7 +230,7 @@ public class FetchFunctionGetParsingTests
         mock.Setup(s => s.FetchAsync(It.IsAny<FetchRequest>(), default))
             .ReturnsAsync(new FetchResponse { Success = true });
 
-        var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv);
+        var sut = new FetchFunction(mock.Object, AuthorizedStore().Object, PermissiveRateLimiter().Object, ProdEnv, Options.Create(new RateLimitOptions()));
         var req = new FakeHttpRequestData(
             new FakeFunctionContext(),
             body: """{"url":"https://example.com","mode":"markdown"}""",

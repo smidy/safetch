@@ -8,6 +8,8 @@ using Safetch.Api.Functions;
 using Safetch.Core.Auth;
 using Safetch.Core.Models;
 using Safetch.Core.Services;
+using Microsoft.Extensions.Options;
+using Safetch.Core.Guards;
 using Safetch.Tests.Fakes;
 using Xunit;
 
@@ -48,7 +50,7 @@ public class FetchFunctionRateLimitTests
         var mockRateLimiter = RateLimiterThatReturns(false, 21, 20);
 
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()));
 
         var response = await function.Run(req, ctx);
 
@@ -72,7 +74,7 @@ public class FetchFunctionRateLimitTests
         var mockRateLimiter = RateLimiterThatReturns(false, 21, 20);
 
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()));
 
         var response = await function.Run(req, ctx);
 
@@ -94,7 +96,7 @@ public class FetchFunctionRateLimitTests
         var mockRateLimiter = RateLimiterThatReturns(false, 21, 20);
 
         var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()));
 
         var response = await function.RunGet(req, ctx);
 
@@ -105,40 +107,49 @@ public class FetchFunctionRateLimitTests
     }
 
     [Fact]
-    public async Task PostFetch_DevelopmentMode_DoesNotCallRateLimiter()
+    public async Task PostFetch_DevelopmentMode_CallsRateLimiterWithLocalDevIdentity()
     {
         var ctx = new FakeFunctionContext();
-        var req = new FakeHttpRequestData(ctx);
+        var req = new FakeHttpRequestData(ctx, body: """{"url":"https://example.com"}""");
+        // No Authorization header — auth is bypassed in Dev
 
         var mockStore = new Mock<IApiKeyStore>();
         var mockRateLimiter = new Mock<IApiKeyRateLimiter>();
-
-        var mockService = new Mock<IFetchService>();
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv);
-
-        await function.Run(req, ctx);
-
-        mockRateLimiter.Verify(r => r.CheckAndIncrementAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never());
-    }
-
-    [Fact]
-    public async Task GetFetch_DevelopmentMode_DoesNotCallRateLimiter()
-    {
-        var ctx = new FakeFunctionContext();
-        var req = new FakeHttpRequestData(ctx, method: "GET", url: "http://localhost/api/fetch?url=https%3A%2F%2Fexample.com");
-
-        var mockStore = new Mock<IApiKeyStore>();
-        var mockRateLimiter = new Mock<IApiKeyRateLimiter>();
+        mockRateLimiter.Setup(r => r.CheckAndIncrementAsync("local-dev", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RateLimitResult(true, 1, 100, DateTimeOffset.UtcNow.AddHours(1)));
 
         var mockService = new Mock<IFetchService>();
         mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FetchResponse { Success = true, Url = "https://example.com", StatusCode = 200, Content = "" });
 
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv, Options.Create(new RateLimitOptions()));
+
+        await function.Run(req, ctx);
+
+        mockRateLimiter.Verify(r => r.CheckAndIncrementAsync("local-dev", It.IsAny<CancellationToken>()), Times.Once());
+    }
+
+    [Fact]
+    public async Task GetFetch_DevelopmentMode_CallsRateLimiterWithLocalDevIdentity()
+    {
+        var ctx = new FakeFunctionContext();
+        var req = new FakeHttpRequestData(ctx, method: "GET", url: "http://localhost/api/fetch?url=https%3A%2F%2Fexample.com");
+        // No Authorization header — auth is bypassed in Dev
+
+        var mockStore = new Mock<IApiKeyStore>();
+        var mockRateLimiter = new Mock<IApiKeyRateLimiter>();
+        mockRateLimiter.Setup(r => r.CheckAndIncrementAsync("local-dev", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RateLimitResult(true, 1, 100, DateTimeOffset.UtcNow.AddHours(1)));
+
+        var mockService = new Mock<IFetchService>();
+        mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FetchResponse { Success = true, Url = "https://example.com", StatusCode = 200, Content = "" });
+
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, DevEnv, Options.Create(new RateLimitOptions()));
 
         await function.RunGet(req, ctx);
 
-        mockRateLimiter.Verify(r => r.CheckAndIncrementAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never());
+        mockRateLimiter.Verify(r => r.CheckAndIncrementAsync("local-dev", It.IsAny<CancellationToken>()), Times.Once());
     }
 
     [Fact]
@@ -158,7 +169,7 @@ public class FetchFunctionRateLimitTests
         mockService.Setup(x => x.FetchAsync(It.IsAny<FetchRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FetchResponse { Success = true });
 
-        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv);
+        var function = new FetchFunction(mockService.Object, mockStore.Object, mockRateLimiter.Object, ProdEnv, Options.Create(new RateLimitOptions()));
 
         await function.Run(req, ctx);
 

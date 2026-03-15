@@ -7,13 +7,10 @@
 `GET /fetch`
 
 ## Authentication
-Bearer token (required in production). Include an API key in the `Authorization` header:
 
-```
-Authorization: Bearer <api-key>
-```
+Authentication is not part of the core library contract — it is implemented at the host/deployment layer. Self-hosters may use any mechanism: API keys, JWT, mutual TLS, or no auth at all.
 
-API keys are issued via the `/api/token` endpoint after GitHub OAuth sign-in. Requests without a valid token return `401 Unauthorized`. In Development mode (`ASPNETCORE_ENVIRONMENT=Development`) auth is bypassed.
+> See your deployment's documentation for the specific auth model in use.
 
 ## Request
 
@@ -76,8 +73,7 @@ Each `injectionWarnings` item:
 |---|---|
 | `200` | Successful fetch. Returns `FetchResponse` with `success: true`. |
 | `400` | Missing or invalid `url` param; URL blocked by a guard (`BLOCKED`). |
-| `401` | Missing or invalid Bearer token (`UNAUTHORIZED`). |
-| `429` | Per-user rate limit exceeded (20 requests/hour). Response includes `Retry-After` header. |
+| `429` | Per-caller rate limit exceeded. Response includes `Retry-After` header. Maximum is configurable via `Safetch:RateLimit:MaxFetchesPerWindow`. |
 | `502` | Fetch failed at network level — DNS rebinding, redirect SSRF, too many redirects, response too large, network error (`FETCH_FAILED`). |
 
 Valid upstream HTTP errors (4xx, 5xx) are returned as `200 OK` with the upstream `statusCode` in the body.
@@ -97,18 +93,14 @@ All responses are `application/json; charset=utf-8`.
 
 ```bash
 # Default (raw)
-curl -H "Authorization: Bearer <api-key>" \
-  "https://www.safetch.ai/api/fetch?url=https://example.com"
+curl "http://localhost:7071/api/fetch?url=https://example.com"
 
 # Readable extraction
-curl -H "Authorization: Bearer <api-key>" \
-  "https://www.safetch.ai/api/fetch?url=https://example.com&mode=readable"
+curl "http://localhost:7071/api/fetch?url=https://example.com&mode=readable"
 
 # Plain text
-curl -H "Authorization: Bearer <api-key>" \
-  "https://www.safetch.ai/api/fetch?url=https://example.com&mode=text"
+curl "http://localhost:7071/api/fetch?url=https://example.com&mode=text"
 
 # Markdown (article extraction + Markdown conversion)
-curl -H "Authorization: Bearer <api-key>" \
-  "https://www.safetch.ai/api/fetch?url=https://example.com&mode=markdown"
+curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
 ```

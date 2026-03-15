@@ -152,7 +152,7 @@ When the content processor detects a potential prompt-injection pattern, the res
 | Max response size | `FetchOptions:MaxResponseBytes` | 10485760 (10 MB) | Maximum size of upstream response body |
 | Max redirects | `FetchOptions:MaxRedirects` | 3 | Maximum HTTP redirects to follow |
 | Fetch timeout | `FetchOptions:TimeoutSeconds` | 15 | Total timeout for a fetch call (seconds) |
-| Rate limit max requests | `Safetch:RateLimit:MaxRequestsPerHour` | 20 | Max requests per hour per GitHub user |
+| Rate limit max requests | `Safetch:RateLimit:MaxFetchesPerWindow` | 100 | Max requests per hour per caller identity (configurable) |
 
 ## Contributing
 

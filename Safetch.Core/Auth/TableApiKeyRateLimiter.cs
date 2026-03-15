@@ -26,11 +26,11 @@ public class TableApiKeyRateLimiter : IApiKeyRateLimiter
         _logger = logger;
     }
 
-    public async Task<RateLimitResult> CheckAndIncrementAsync(string githubUserId, CancellationToken ct = default)
+    public async Task<RateLimitResult> CheckAndIncrementAsync(string callerIdentity, CancellationToken ct = default)
     {
         var windowKey = DateTimeOffset.UtcNow.ToString("yyyyMMddHH");
         var partitionKey = "ratelimit";
-        var rowKey = $"{githubUserId}:{windowKey}";
+        var rowKey = $"{callerIdentity}:{windowKey}";
         var windowResetsAt = DateTimeOffset.UtcNow.Date + TimeSpan.FromHours(DateTimeOffset.UtcNow.Hour + 1);
 
         // Step 1: Try to read existing entity
