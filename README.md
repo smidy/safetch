@@ -20,6 +20,8 @@ Safetch is an Azure Functions v4 isolated worker built on .NET 9. It follows a t
 
 ## Self-Hosting
 
+Safetch can be hosted locally either by running directly with dotnet or building a docker container with the supplied dockerfile. I also have an instance hosted at [www.safetch.ai](https://www.safetch.ai/) which is free and requires authentication through Github.
+
 ### Prerequisites
 
 - .NET 9 SDK
