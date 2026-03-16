@@ -1,4 +1,6 @@
-﻿# Running Safetch in Docker
+# Running Safetch in Docker
+
+The base `Safetch.Api` project is an ASP.NET Core app. To run it in Docker:
 
 ## Build the image
 ```bash
@@ -7,40 +9,28 @@ docker build -t safetch .
 
 ## Run the container
 ```bash
-docker run -p 7071:80 \
-  -e AzureWebJobsStorage="UseDevelopmentStorage=true" \
-  -e FUNCTIONS_WORKER_RUNTIME="dotnet-isolated" \
+docker run -p 5000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Development \
   safetch
 ```
 
-> **Note**: The Azure Functions runtime inside the container listens on port **80**. The `-p 7071:80` maps host port 7071 to container port 80, matching the default local Functions port for consistency.
+> ASP.NET Core containers default to listening on port **8080** inside the container. The `-p 5000:8080` maps host port 5000 to container port 8080.
 
 ## Test the endpoint
 ```bash
-curl "http://localhost:7071/api/fetch?url=https://example.com"
-```
-
-## Using Azurite for local storage
-
-If your HTTP-only functions don't actively use storage, `UseDevelopmentStorage=true` is sufficient. If you need a real Azurite instance, run it separately:
-```bash
-docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite
-```
-
-Then set `AzureWebJobsStorage` to the Azurite connection string:
-```
-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=<key>;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;
+curl "http://localhost:5000/api/fetch?url=https://example.com"
 ```
 
 ## Environment variables reference
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `AzureWebJobsStorage` | Yes | Storage connection. Use Azurite or a real connection string. | `UseDevelopmentStorage=true` |
-| `FUNCTIONS_WORKER_RUNTIME` | Yes | Must be `dotnet-isolated` | `dotnet-isolated` |
-| `ASPNETCORE_ENVIRONMENT` | No | Set to `Development` to bypass all auth and rate limiting (already set in Dockerfile for local dev) | `Development` |
+| `ASPNETCORE_ENVIRONMENT` | No | Set to `Development` to use in-memory rate limiting with a fixed identity. Omit or set to `Production` to use your own auth and rate limiting implementation. | `Development` |
+| `FetchOptions:MaxResponseBytes` | No | Max upstream response body size in bytes. Default: `10485760` (10 MB). | `10485760` |
+| `FetchOptions:TimeoutSeconds` | No | Per-request HTTP timeout. Default: `15`. | `15` |
+| `Safetch:RateLimit:Limits__0__MaxFetchesPerWindow` | No | Max requests per window per caller identity. Default: `100`. | `100` |
 
 ## Notes
-- In production deployments, `ASPNETCORE_ENVIRONMENT` should NOT be set to `Development` — remove it or set to `Production` to enforce API key auth and rate limiting. `AzureWebJobsStorage` must point to a real Azure Storage account for API key persistence.
-- `local.settings.json` is excluded by `.dockerignore` and must never be copied into the image.
+
+- The base `Safetch.Api` project ships with **no auth** and an `InMemoryRateLimiter` using a fixed `"local"` caller identity. Deployers who add an auth layer should replace the caller identity passed to `CheckAndIncrementAsync` with the authenticated user's identity.
+- For Azure Functions deployment, see [`config/azure-functions.md`](../config/azure-functions.md).

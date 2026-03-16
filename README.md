@@ -16,16 +16,13 @@ Safetch is a minimal, auditable, and secure HTTP fetch service designed for AI a
 
 ## Architecture
 
-Safetch is an Azure Functions v4 isolated worker built on .NET 9. It follows a three-project solution structure: `Safetch.Core` (domain logic), `Safetch.Api` (HTTP triggers), and `Safetch.Tests`. It uses `System.Text.Json` exclusively — no Newtonsoft.Json — and avoids unnecessary abstractions for observability and security control.
+Safetch is a .NET 9 solution with three projects: `Safetch.Core` (domain logic), `Safetch.Api` (ASP.NET Core Minimal API host), and `Safetch.Tests`. It uses `System.Text.Json` exclusively — no Newtonsoft.Json — and avoids unnecessary abstractions for observability and security control.
 
 ## Self-Hosting
-
-Safetch can be hosted locally either by running directly with dotnet or building a docker container with the supplied dockerfile. I also have an instance hosted at [www.safetch.ai](https://www.safetch.ai/) which is free and requires authentication through Github.
 
 ### Prerequisites
 
 - .NET 9 SDK
-- Azure Functions Core Tools v4
 - Git
 
 ### Steps
@@ -33,34 +30,34 @@ Safetch can be hosted locally either by running directly with dotnet or building
 1. Clone: `git clone https://github.com/smidy/safetch.git && cd safetch`
 2. Build: `dotnet build`
 3. Navigate: `cd Safetch.Api`
-4. Create `local.settings.json`:
+4. Run:
 
-```json
-{
-  "IsEncryptedValues": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
-  }
-}
+```bash
+dotnet run
 ```
 
-5. Start: `func start`
+The API starts on `http://localhost:5000` by default.
 
 ### Test it
 
 ```bash
-curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
+# GET
+curl "http://localhost:5000/api/fetch?url=https://example.com&mode=markdown"
+
+# POST
+curl -X POST http://localhost:5000/api/fetch \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com", "mode": "markdown"}'
 ```
 
 ## API Reference
 
-### GET /fetch
+### GET /api/fetch
 
 Query parameters: `url` (required), `mode` (optional: `raw` \| `readable` \| `text` \| `markdown`, default `raw`)
 
 ```bash
-curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
+curl "http://localhost:5000/api/fetch?url=https://example.com&mode=markdown"
 ```
 
 **Response (success):**
@@ -83,12 +80,12 @@ curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
 
 > ⚠️ Note: GET has URL length limits for very long target URLs — use POST for those.
 
-### POST /fetch
+### POST /api/fetch
 
 JSON body: `{ "url": "...", "mode": "..." }` (`mode` optional)
 
 ```bash
-curl -X POST http://localhost:7071/api/fetch \
+curl -X POST http://localhost:5000/api/fetch \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "mode": "markdown"}'
 ```

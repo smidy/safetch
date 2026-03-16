@@ -1,54 +1,23 @@
-﻿# Azure Functions Configuration for Safetch
+﻿# Hosting Safetch on Azure Functions
 
-Safetch uses Azure Functions v4 isolated worker runtime. Its configuration is split across two files:
+Safetch's core logic (`Safetch.Core`) is deployment-agnostic. The base `Safetch.Api` project is an ASP.NET Core Minimal API host.
 
-| File | Scope | Managed by |
-|------|--------|-------------|
-| `host.json` | Runtime-wide (all functions, logging, timeout, telemetry) | Safetch team — versioned in Git |
-| `local.settings.json` | Local dev only (secrets, feature flags, storage) | Developers — excluded from Git |
+If you want to run Safetch as an Azure Function, you can wrap `Safetch.Core` in an Azure Functions isolated worker project. A reference Azure Functions implementation is available in the [safetch GitHub repository](https://github.com/smidy/safetch) (see `safetch-functions/`) that demonstrates how to do this, including:
 
----
+- `FetchFunction` — Azure Functions trigger wrapping `IFetchService`
+- `TableApiKeyStore` — Azure Table Storage implementation of `IApiKeyStore`
+- `TableApiKeyRateLimiter` — Azure Table Storage implementation of `IApiKeyRateLimiter`
 
-## `host.json` Reference
+These concrete Azure implementations are not included in this library — they are deployment-specific infrastructure. You are free to provide your own implementations of `IApiKeyStore` and `IApiKeyRateLimiter` from `Safetch.Core.Auth`.
 
-### `version`
-- Required: `"2.0"` for isolated worker model.
-- Safetch uses this — no change needed.
+## Key configuration for Azure Functions deployments
 
-### `functionTimeout`
-- Default: `"00:05:00"`. Safetch sets `"00:10:00"` to safely handle large HTML payloads or slow upstreams.
-- ⚠️ Must stay ≤ `"00:10:00"` on Consumption plan.
+| Key | Purpose |
+|---|---|
+| `AzureWebJobsStorage` | Azure Storage connection string (for Table Storage rate limiting and key store) |
+| `FUNCTIONS_WORKER_RUNTIME` | Must be `dotnet-isolated` for .NET 9 |
+| `Safetch:RateLimit:Limits[0]:MaxFetchesPerWindow` | Max requests per window per caller |
+| `FetchOptions:MaxResponseBytes` | Max upstream response body size |
+| `FetchOptions:TimeoutSeconds` | Per-request timeout |
 
-### `logging`
-- Safetch configures granular log levels:
-  - `Safetch.Api.FetchFunction`: `Information` (full request/response trace)
-  - `Safetch.Core.SafeHttpFetcher`: `Warning` (only errors/warnings)
-  - `Safetch.Core.ContentProcessor`: `Warning` (suppresses verbose sanitisation logs)
-- Application Insights sampling enabled (`maxTelemetryItemsPerSecond: 20`) — reduces noise without losing signal.
-
----
-
-## `local.settings.json` Reference
-
-Safetch defines these keys for local development:
-
-| Key | Value | Purpose |
-|-----|-------|---------|
-| `AzureWebJobsStorage` | `UseDevelopmentStorage=true` | Enables local Storage Emulator |
-| `FUNCTIONS_WORKER_RUNTIME` | `dotnet-isolated` | Required for .NET 9 isolated worker |
-| `Safetch:RateLimit:MaxFetchesPerWindow` | `100` | Max fetch requests per window per caller identity (Development: in-memory, fixed "local-dev" identity; Production: Azure Table Storage per GitHub user ID) |
-| `Safetch:Telemetry:LogLevel` | `Debug` | Enables detailed telemetry during local debugging |
-| `FetchOptions:MaxResponseBytes` | `10485760` | Max response body size in bytes (default 10 MB) |
-| `FetchOptions:MaxRedirects` | `3` | Max HTTP redirects before the request is aborted |
-| `FetchOptions:TimeoutSeconds` | `15` | Per-request HTTP timeout in seconds |
-
-> 🔐 `local.settings.json` is git-ignored. Never commit secrets here.
-
-> 💡 Rate limiting is **active in all environments**. In Development, `InMemoryRateLimiter` is used (no Azure Storage required). In Production, `TableApiKeyRateLimiter` persists counters in Azure Table Storage.
-
----
-
-## Security Notes
-- `host.json` is **not secret** — it’s safe to version in Git.
-- `local.settings.json` **must never be committed** — it may contain keys or override production behavior.
-- All config values are loaded via `IConfiguration` and validated at startup. Invalid JSON causes immediate host failure.
+> For local Functions development, use `UseDevelopmentStorage=true` as the `AzureWebJobsStorage` value with [Azurite](https://github.com/Azure/Azurite).

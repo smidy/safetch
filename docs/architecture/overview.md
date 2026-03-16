@@ -1,5 +1,5 @@
-﻿**Scope**: Entire solution
-**Tags**: architecture, solution-structure, azure-functions, dotnet
+**Scope**: Entire solution
+**Tags**: architecture, solution-structure, aspnetcore, dotnet
 **Summary**: Solution map, technology choices, and key design decisions.
 **See Also**: ../INDEX.md
 
@@ -9,21 +9,23 @@
 
 | Project | Purpose | Dependencies |
 |---------|---------|--------------|
-| `Safetch.Core` | Models, interfaces, guards, service implementations. No Azure dependencies. | None (pure .NET 9 library) |
-| `Safetch.Api` | Azure Functions isolated worker host, HTTP triggers, DI wiring. | `Safetch.Core` |
+| `Safetch.Core` | Models, interfaces, guards, service implementations. No cloud or infrastructure dependencies. | None (pure .NET 9 library) |
+| `Safetch.Api` | ASP.NET Core Minimal API host. Exposes `GET /api/fetch` and `POST /api/fetch`. Wires `Safetch.Core` via DI. No auth — left to deployer. | `Safetch.Core` |
 | `Safetch.Tests` | xUnit + Moq unit and integration tests. | `Safetch.Core`, `Safetch.Api` |
 
-- **Dependency direction**: `Api` → `Core`, `Tests` → `Core` + `Api`.
+- **Dependency direction**: `Api` → `Core`, `Tests` → `Core`.
 - All three projects are part of the same solution (`Safetch.sln`).
+
+> **Deployers**: if you want to host Safetch on Azure Functions, see [`config/azure-functions.md`](../config/azure-functions.md) for a guide on wrapping `Safetch.Core` in an Azure Functions isolated worker project.
 
 ---
 
 ## Technology choices
 
-- **.NET 9** – intent to migrate to .NET 10 when tooling matures.
-- **Azure Functions v4 isolated worker model** – not the deprecated in-process model.
-- **`System.Text.Json`** – no Newtonsoft.Json used.
-- **`SafeHttpFetcher` owns its `HttpClient`** – built directly on `SocketsHttpHandler` (not `IHttpClientFactory`) to enable `ConnectCallback` for DNS pinning. See `docs/domain/security-pipeline.md`.
+- **.NET 9** — intent to migrate to .NET 10 when tooling matures.
+- **ASP.NET Core Minimal API** — thin, low-ceremony host for `Safetch.Core`. No controllers, no middleware layers beyond what ASP.NET Core provides.
+- **`System.Text.Json`** — no Newtonsoft.Json used anywhere in the solution.
+- **`SafeHttpFetcher` owns its `HttpClient`** — built directly on `SocketsHttpHandler` (not `IHttpClientFactory`) to enable `ConnectCallback` for DNS pinning. See `docs/domain/security-pipeline.md`.
 
 ---
 
@@ -33,8 +35,8 @@ Two endpoints, same pipeline:
 
 | Method | Parameters | Doc |
 |---|---|---|
-| `POST /fetch` | JSON body: `{ "url": "..." }` | [api/post-fetch.md](../api/post-fetch.md) |
-| `GET /fetch` | Query string: `?url=...` | [api/get-fetch.md](../api/get-fetch.md) |
+| `POST /api/fetch` | JSON body: `{ "url": "..." }` | [api/post-fetch.md](../api/post-fetch.md) |
+| `GET /api/fetch` | Query string: `?url=...` | [api/get-fetch.md](../api/get-fetch.md) |
 
 Both accept a URL, run the full security pipeline, and return a `FetchResponse`:
 
@@ -42,9 +44,7 @@ Both accept a URL, run the full security pipeline, and return a `FetchResponse`:
 |---|---|
 | `{ "success": true, "url": "...", "content": "...", "statusCode": 200, "injectionWarnings": [] }` | `{ "success": false, "errorCode": "BLOCKED"\|"FETCH_FAILED", "error": "..." }` |
 
-- Content is returned as Markdown (HTML pages are converted via ReverseMarkdown).
 - `injectionWarnings` is present when injection patterns are detected — each item has `category`, `severity`, and `patternMatched`.
-
 - GET is unsuitable for very long URLs — prefer POST for those.
 
 ---
@@ -65,7 +65,7 @@ Both accept a URL, run the full security pipeline, and return a `FetchResponse`:
 
 ## Security pipeline
 
-**Guards (Sprint 1)** — run before every fetch:
+**Guards** — run before every fetch:
 
 1. `UrlSchemeGuard` — rejects non-http/https schemes
 2. `EncodedIpGuard` — rejects literal private IPs in the URL host
@@ -73,7 +73,7 @@ Both accept a URL, run the full security pipeline, and return a `FetchResponse`:
 
 `SafeHttpFetcher` adds DNS pinning at the socket level and per-hop redirect SSRF validation. See `docs/domain/security-pipeline.md`.
 
-**Content processors (Sprint 2)** — run after every successful fetch:
+**Content processors** — run after every successful fetch:
 
 1. `HtmlSanitizerProcessor` — removes CSS-hidden elements, `data-*` attributes, `<svg>`, `<meta http-equiv>` (HTML only)
 2. `HtmlToMarkdownProcessor` — converts HTML to Markdown (HTML only)

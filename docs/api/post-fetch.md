@@ -92,27 +92,27 @@ All responses are `application/json; charset=utf-8`.
 
 ```bash
 # Default (raw)
-curl -X POST http://localhost:7071/api/fetch \
+curl -X POST http://localhost:5000/api/fetch \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 
 # With identity key (recommended for LLM pipelines)
-curl -X POST http://localhost:7071/api/fetch \
+curl -X POST http://localhost:5000/api/fetch \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "identityKey": "a3f1c92b"}'
 
 # Readable extraction
-curl -X POST http://localhost:7071/api/fetch \
+curl -X POST http://localhost:5000/api/fetch \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "mode": "readable"}'
 
 # Plain text
-curl -X POST http://localhost:7071/api/fetch \
+curl -X POST http://localhost:5000/api/fetch \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "mode": "text"}'
 
 # Markdown (article extraction + Markdown conversion)
-curl -X POST http://localhost:7071/api/fetch \
+curl -X POST http://localhost:5000/api/fetch \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "mode": "markdown"}'
 ```

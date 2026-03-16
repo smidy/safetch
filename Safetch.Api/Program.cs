@@ -1,72 +1,174 @@
-﻿using Azure.Data.Tables;
-using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Safetch.Core.Auth;
 using Safetch.Core.Extensions;
 using Safetch.Core.Guards;
 using Safetch.Core.Http;
+using Safetch.Core.Models;
 using Safetch.Core.Processing;
 using Safetch.Core.Services;
+using System.Text.Json;
 
-var host = new HostBuilder()
-    .ConfigureFunctionsWorkerDefaults()
-    .ConfigureServices((context, services) =>
+var builder = WebApplication.CreateBuilder(args);
+
+// Guards
+builder.Services.AddRequestGuard<UrlSchemeGuard>(order: 1);
+builder.Services.AddRequestGuard<EncodedIpGuard>(order: 2);
+builder.Services.AddRequestGuard<SsrfGuard>(order: 3);
+
+// Content processors
+builder.Services.AddContentProcessor<ReadableContentProcessor>(contentType: "text/html+readable", order: 1);
+builder.Services.AddContentProcessor<ReadableContentProcessor>(contentType: "text/html+text", order: 1);
+builder.Services.AddContentProcessor<ReadableContentProcessor>(contentType: "text/html+markdown", order: 1);
+builder.Services.AddContentProcessor<HtmlSanitizerProcessor>(contentType: "text/html+markdown", order: 2);
+builder.Services.AddContentProcessor<HtmlToMarkdownProcessor>(contentType: "text/html+markdown", order: 3);
+builder.Services.AddContentProcessor<HtmlSanitizerProcessor>(contentType: "text/html", order: 2);
+builder.Services.AddContentProcessor<HtmlToMarkdownProcessor>(contentType: "text/html", order: 3);
+builder.Services.AddContentProcessor<UnicodeTagStripProcessor>(contentType: "*", order: 4);
+builder.Services.AddContentProcessor<InjectionPatternProcessor>(contentType: "*", order: 5);
+builder.Services.AddContentProcessor<SpotlightingProcessor>(contentType: "*", order: 6);
+builder.Services.AddScoped<ContentProcessorPipeline>();
+
+// HTTP fetcher
+builder.Services.AddOptions<FetchOptions>().BindConfiguration("FetchOptions");
+builder.Services.AddSingleton<SafeHttpFetcher>();
+
+// Rate limiting (in-memory only — no Azure dependency in this host)
+builder.Services.AddMemoryCache();
+builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection("Safetch:RateLimit"));
+builder.Services.AddSingleton<IApiKeyRateLimiter, InMemoryRateLimiter>();
+
+// Fetch service
+builder.Services.AddScoped<FetchService>();
+builder.Services.AddScoped<IFetchService>(sp =>
+    new AuditingFetchService(
+        sp.GetRequiredService<FetchService>(),
+        sp.GetRequiredService<ILogger<AuditingFetchService>>()));
+
+var app = builder.Build();
+
+// POST /api/fetch
+app.MapPost("/api/fetch", async (HttpContext ctx, IFetchService fetchService, IApiKeyRateLimiter rateLimiter, IOptions<RateLimitOptions> rateLimitOptions, CancellationToken ct) =>
+{
+    FetchRequestDto? dto;
+    try
     {
-        // Security pipeline — guards run in Order sequence (1 → 2 → 3)
-        services.AddRequestGuard<UrlSchemeGuard>(order: 1);
-        services.AddRequestGuard<EncodedIpGuard>(order: 2);
-        services.AddRequestGuard<SsrfGuard>(order: 3);
+        dto = await ctx.Request.ReadFromJsonAsync<FetchRequestDto>(ct);
+    }
+    catch (JsonException)
+    {
+        return Results.Json(new { error = "Invalid JSON request body.", errorCode = (string?)null }, statusCode: 400);
+    }
 
-        // Content processing pipeline — runs after fetch, before returning to caller
-        // Readable extraction — only active for mode=readable and mode=text
-        services.AddContentProcessor<ReadableContentProcessor>(contentType: "text/html+readable", order: 1);
-        services.AddContentProcessor<ReadableContentProcessor>(contentType: "text/html+text", order: 1);
-        // Markdown mode: Readability extraction → sanitise → convert to Markdown
-        services.AddContentProcessor<ReadableContentProcessor>(contentType: "text/html+markdown", order: 1);
-        services.AddContentProcessor<HtmlSanitizerProcessor>(contentType: "text/html+markdown", order: 2);
-        services.AddContentProcessor<HtmlToMarkdownProcessor>(contentType: "text/html+markdown", order: 3);
-        services.AddContentProcessor<HtmlSanitizerProcessor>(contentType: "text/html", order: 2);
-        services.AddContentProcessor<HtmlToMarkdownProcessor>(contentType: "text/html", order: 3);
-        services.AddContentProcessor<UnicodeTagStripProcessor>(contentType: "*", order: 4);
-        services.AddContentProcessor<InjectionPatternProcessor>(contentType: "*", order: 5);
-        services.AddContentProcessor<SpotlightingProcessor>(contentType: "*", order: 6);
-        services.AddScoped<ContentProcessorPipeline>();
+    var rawIdentityKey = dto?.IdentityKey;
+    var fetchRequest = new FetchRequest
+    {
+        Url = dto?.Url,
+        Mode = ParseMode(dto?.Mode)
+    };
 
-        // SafeHttpFetcher is Singleton — owns its HttpClient lifecycle
-        services.AddOptions<FetchOptions>()
-    .BindConfiguration("FetchOptions");
-        services.AddSingleton<SafeHttpFetcher>();
+    if (string.IsNullOrWhiteSpace(fetchRequest.Url))
+        return Results.Json(new { error = "url is required", errorCode = (string?)null }, statusCode: 400);
 
-        // IMemoryCache for rate limiting (Singleton — safe to inject into Scoped guards)
-        services.AddMemoryCache();
-        services.Configure<RateLimitOptions>(context.Configuration.GetSection("Safetch:RateLimit"));
+    if (!string.IsNullOrEmpty(rawIdentityKey) && !IsValidIdentityKey(rawIdentityKey))
+        return Results.Json(new { error = "identityKey must be 8 printable ASCII characters or fewer", errorCode = (string?)null }, statusCode: 400);
 
-        // FetchService wrapped by AuditingFetchService decorator
-        services.AddScoped<FetchService>();
-        services.AddScoped<IFetchService>(sp =>
-            new AuditingFetchService(
-                sp.GetRequiredService<FetchService>(),
-                sp.GetRequiredService<ILogger<AuditingFetchService>>()));
+    fetchRequest.IdentityKey = rawIdentityKey;
 
-        // Azure Table Storage for API key persistence
-        services.AddSingleton(sp =>
-        {
-            var connStr = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
-                ?? throw new InvalidOperationException("AzureWebJobsStorage is not configured.");
-            var tableClient = new TableClient(connStr, "ApiKeys");
-            tableClient.CreateIfNotExists();
-            return tableClient;
-        });
-        services.AddSingleton<IApiKeyStore, TableApiKeyStore>();
+    var rateLimit = await rateLimiter.CheckAndIncrementAsync("local", ct);
+    if (!rateLimit.Allowed)
+    {
+        var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
+        ctx.Response.Headers["Retry-After"] = retryAfter.ToString();
+        return Results.Json(new { error = $"Rate limit exceeded: {rateLimit.TierLabel}.", errorCode = "RATE_LIMITED" }, statusCode: 429);
+    }
 
-        if (context.HostingEnvironment.IsDevelopment())
-            services.AddSingleton<IApiKeyRateLimiter, InMemoryRateLimiter>();
-        else
-            services.AddSingleton<IApiKeyRateLimiter, TableApiKeyRateLimiter>();
+    FetchResponse fetchResponse;
+    try
+    {
+        fetchResponse = await fetchService.FetchAsync(fetchRequest, ct);
+    }
+    catch
+    {
+        return Results.Json(new { error = "Failed to fetch the requested URL", errorCode = "FETCH_FAILED" }, statusCode: 502);
+    }
 
-    })
-    .Build();
+    if (!fetchResponse.Success)
+    {
+        var statusCode = fetchResponse.ErrorCode == "BLOCKED" ? 400 : 502;
+        return Results.Json(new { error = fetchResponse.ErrorMessage, errorCode = fetchResponse.ErrorCode }, statusCode: statusCode);
+    }
 
-host.Run();
+    return Results.Json(fetchResponse, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+});
+
+// GET /api/fetch
+app.MapGet("/api/fetch", async (HttpContext ctx, IFetchService fetchService, IApiKeyRateLimiter rateLimiter, IOptions<RateLimitOptions> rateLimitOptions, CancellationToken ct) =>
+{
+    var query = ctx.Request.Query;
+    var url = query["url"].FirstOrDefault();
+    var modeStr = query["mode"].FirstOrDefault();
+    var identityKey = query["identityKey"].FirstOrDefault();
+
+    if (string.IsNullOrWhiteSpace(url)
+        || !Uri.TryCreate(url, UriKind.Absolute, out var parsedUri)
+        || (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+    {
+        return Results.Json(new { error = "url is required and must be a valid absolute HTTP/HTTPS URL", errorCode = (string?)null }, statusCode: 400);
+    }
+
+    if (!string.IsNullOrEmpty(identityKey) && !IsValidIdentityKey(identityKey))
+        return Results.Json(new { error = "identityKey must be 8 printable ASCII characters or fewer", errorCode = (string?)null }, statusCode: 400);
+
+    var rateLimit = await rateLimiter.CheckAndIncrementAsync("local", ct);
+    if (!rateLimit.Allowed)
+    {
+        var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
+        ctx.Response.Headers["Retry-After"] = retryAfter.ToString();
+        return Results.Json(new { error = $"Rate limit exceeded: {rateLimit.TierLabel}.", errorCode = "RATE_LIMITED" }, statusCode: 429);
+    }
+
+    var fetchRequest = new FetchRequest
+    {
+        Url = url,
+        Mode = ParseMode(modeStr),
+        IdentityKey = identityKey
+    };
+
+    FetchResponse fetchResponse;
+    try
+    {
+        fetchResponse = await fetchService.FetchAsync(fetchRequest, ct);
+    }
+    catch
+    {
+        return Results.Json(new { error = "Failed to fetch the requested URL", errorCode = "FETCH_FAILED" }, statusCode: 502);
+    }
+
+    if (!fetchResponse.Success)
+    {
+        var statusCode = fetchResponse.ErrorCode == "BLOCKED" ? 400 : 502;
+        return Results.Json(new { error = fetchResponse.ErrorMessage, errorCode = fetchResponse.ErrorCode }, statusCode: statusCode);
+    }
+
+    return Results.Json(fetchResponse, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+});
+
+app.Run();
+
+static ResponseMode ParseMode(string? mode) => mode?.ToLowerInvariant() switch
+{
+    "readable" => ResponseMode.Readable,
+    "text"     => ResponseMode.Text,
+    "markdown" => ResponseMode.Markdown,
+    _          => ResponseMode.Raw
+};
+
+static bool IsValidIdentityKey(string key)
+{
+    if (key.Length > 8) return false;
+    foreach (var c in key)
+        if (c < 0x20 || c > 0x7E) return false;
+    return true;
+}
+
+record FetchRequestDto(string? Url, string? Mode, string? IdentityKey);

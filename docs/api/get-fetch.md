@@ -26,7 +26,7 @@ Query parameters:
 GET /fetch?url=https://example.com&mode=readable
 ```
 
-**Note**: GET is unsuitable for very long target URLs. The Azure Functions host imposes query-string length limits that the POST (body) endpoint does not share. Use `POST /fetch` for long URLs.
+**Note**: GET is unsuitable for very long target URLs due to HTTP client and browser URL-length limits. Use `POST /api/fetch` for long URLs.
 
 ## Response — success
 
@@ -95,17 +95,17 @@ All responses are `application/json; charset=utf-8`.
 
 ```bash
 # Default (raw)
-curl "http://localhost:7071/api/fetch?url=https://example.com"
+curl "http://localhost:5000/api/fetch?url=https://example.com"
 
 # With identity key (recommended for LLM pipelines)
-curl "http://localhost:7071/api/fetch?url=https://example.com&identityKey=a3f1c92b"
+curl "http://localhost:5000/api/fetch?url=https://example.com&identityKey=a3f1c92b"
 
 # Readable extraction
-curl "http://localhost:7071/api/fetch?url=https://example.com&mode=readable"
+curl "http://localhost:5000/api/fetch?url=https://example.com&mode=readable"
 
 # Plain text
-curl "http://localhost:7071/api/fetch?url=https://example.com&mode=text"
+curl "http://localhost:5000/api/fetch?url=https://example.com&mode=text"
 
 # Markdown (article extraction + Markdown conversion)
-curl "http://localhost:7071/api/fetch?url=https://example.com&mode=markdown"
+curl "http://localhost:5000/api/fetch?url=https://example.com&mode=markdown"
 ```
