@@ -16,8 +16,6 @@
 - **Dependency direction**: `Api` → `Core`, `Tests` → `Core`.
 - All three projects are part of the same solution (`Safetch.sln`).
 
-> **Deployers**: if you want to host Safetch on Azure Functions, see [`config/azure-functions.md`](../config/azure-functions.md) for a guide on wrapping `Safetch.Core` in an Azure Functions isolated worker project.
-
 ---
 
 ## Technology choices

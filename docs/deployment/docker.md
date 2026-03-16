@@ -33,4 +33,3 @@ curl "http://localhost:5000/api/fetch?url=https://example.com"
 ## Notes
 
 - The base `Safetch.Api` project ships with **no auth** and an `InMemoryRateLimiter` using a fixed `"local"` caller identity. Deployers who add an auth layer should replace the caller identity passed to `CheckAndIncrementAsync` with the authenticated user's identity.
-- For Azure Functions deployment, see [`config/azure-functions.md`](../config/azure-functions.md).

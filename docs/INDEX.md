@@ -9,7 +9,6 @@
 | File | Summary | Tags |
 |---|---|---|
 | [architecture/overview.md](architecture/overview.md) | Solution map, technology choices, error handling contract, security pipeline summary | architecture, solution-structure, aspnetcore, dotnet |
-| [config/azure-functions.md](config/azure-functions.md) | Guide for deployers who want to host Safetch.Core on Azure Functions — reference implementation, key config values | config, azure-functions, deployment |
 | [development/local-dev.md](development/local-dev.md) | Local development setup: prerequisites, dotnet run, testing the /api/fetch endpoint, configuration reference | development, local-dev, aspnetcore, debugging |
 | [deployment/docker.md](deployment/docker.md) | Running Safetch.Api in a Docker container — build, run, port mapping, environment variable reference | deployment, docker, container |
 
