@@ -19,7 +19,6 @@ public class FetchFunction
     private readonly IApiKeyRateLimiter _rateLimiter;
     private readonly ILogger<FetchFunction> _logger;
     private readonly bool _isDevelopment;
-    private readonly RateLimitOptions _rateLimitOptions;
 
     public FetchFunction(IFetchService fetchService, 
         IApiKeyStore apiKeyStore, 
@@ -33,7 +32,7 @@ public class FetchFunction
         _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
         _logger = logger;
         _isDevelopment = environment?.IsDevelopment() ?? false;
-        _rateLimitOptions = rateLimitOptions.Value;
+
     }
 
     [Function("Fetch")]
@@ -66,7 +65,7 @@ public class FetchFunction
                 var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
                 response.Headers.Add("Retry-After", retryAfter.ToString());
                 await WriteJsonResponseAsync(response, HttpStatusCode.TooManyRequests,
-                    new { error = $"Rate limit exceeded. Maximum {_rateLimitOptions.MaxFetchesPerWindow} requests per hour.", errorCode = "RATE_LIMITED" });
+                    new { error = $"Rate limit exceeded: {rateLimit.TierLabel}.", errorCode = "RATE_LIMITED" });
                 return response;
             }
 
@@ -181,7 +180,7 @@ public class FetchFunction
             var retryAfter = (int)Math.Ceiling((rateLimit.WindowResetsAt - DateTimeOffset.UtcNow).TotalSeconds);
             response.Headers.Add("Retry-After", retryAfter.ToString());
             await WriteJsonResponseAsync(response, HttpStatusCode.TooManyRequests,
-                new { error = $"Rate limit exceeded. Maximum {_rateLimitOptions.MaxFetchesPerWindow} requests per hour.", errorCode = "RATE_LIMITED" });
+                new { error = $"Rate limit exceeded: {rateLimit.TierLabel}.", errorCode = "RATE_LIMITED" });
             return response;
         }
 

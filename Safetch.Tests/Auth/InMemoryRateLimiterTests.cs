@@ -9,12 +9,14 @@ namespace Safetch.Tests.Auth;
 
 public class InMemoryRateLimiterTests
 {
-    private static InMemoryRateLimiter CreateLimiter(int maxPerWindow = 5, Func<DateTimeOffset>? clock = null)
+    private static InMemoryRateLimiter CreateLimiter(int maxPerWindow = 5, TimeSpan? window = null, Func<DateTimeOffset>? clock = null)
     {
         var options = Options.Create(new RateLimitOptions
         {
-            MaxFetchesPerWindow = maxPerWindow,
-            Window = TimeSpan.FromHours(1)
+            Limits = new()
+            {
+                new RateLimitTier { MaxFetchesPerWindow = maxPerWindow, Window = window ?? TimeSpan.FromHours(1) }
+            }
         });
         return new InMemoryRateLimiter(options, clock);
     }
@@ -38,6 +40,18 @@ public class InMemoryRateLimiterTests
         var result = await limiter.CheckAndIncrementAsync("user-a");
         Assert.False(result.Allowed);
         Assert.Equal(5, result.Count);
+    }
+
+    [Fact]
+    public async Task AtLimit_TierLabelIsPopulated()
+    {
+        var limiter = CreateLimiter(maxPerWindow: 3, window: TimeSpan.FromMinutes(1));
+        for (int i = 0; i < 3; i++)
+            await limiter.CheckAndIncrementAsync("user-a");
+
+        var result = await limiter.CheckAndIncrementAsync("user-a");
+        Assert.False(result.Allowed);
+        Assert.Equal("3 requests per minute", result.TierLabel);
     }
 
     [Fact]
@@ -93,5 +107,14 @@ public class InMemoryRateLimiterTests
         var result = await limiter.CheckAndIncrementAsync("user-b");
         Assert.True(result.Allowed);
         Assert.Equal(1, result.Count);
+    }
+
+    [Fact]
+    public async Task NoLimitsConfigured_FallsBackToDefault_Allows()
+    {
+        var options = Options.Create(new RateLimitOptions { Limits = new() });
+        var limiter = new InMemoryRateLimiter(options);
+        var result = await limiter.CheckAndIncrementAsync("user-a");
+        Assert.True(result.Allowed);
     }
 }

@@ -2,7 +2,6 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
-using Azure.Core;
 using Azure.Data.Tables;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -29,13 +28,35 @@ public class TableApiKeyRateLimiter : IApiKeyRateLimiter
     public async Task<RateLimitResult> CheckAndIncrementAsync(string callerIdentity, CancellationToken ct = default)
     {
         var now = DateTimeOffset.UtcNow;
+
+        if (_options.Limits.Count == 0)
+            return new RateLimitResult(true, 0, 0, now.AddHours(1));
+
+        RateLimitResult? lastResult = null;
+        foreach (var tier in _options.Limits)
+        {
+            var result = await CheckAndIncrementTierAsync(callerIdentity, tier, now, ct);
+            if (!result.Allowed)
+                return result;
+            lastResult = result;
+        }
+
+        return lastResult!;
+    }
+
+    private async Task<RateLimitResult> CheckAndIncrementTierAsync(
+        string callerIdentity,
+        RateLimitTier tier,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
         var windowStart = new DateTimeOffset(
-            now.UtcDateTime - TimeSpan.FromTicks(now.UtcDateTime.Ticks % _options.Window.Ticks),
+            now.UtcDateTime - TimeSpan.FromTicks(now.UtcDateTime.Ticks % tier.Window.Ticks),
             TimeSpan.Zero);
         var windowKey = windowStart.ToUnixTimeSeconds().ToString();
         var partitionKey = "ratelimit";
-        var rowKey = $"{callerIdentity}:{windowKey}";
-        var windowResetsAt = windowStart + _options.Window;
+        var rowKey = $"{callerIdentity}:{tier.Window.Ticks}:{windowKey}";
+        var windowResetsAt = windowStart + tier.Window;
 
         // Step 1: Try to read existing entity
         try
@@ -44,8 +65,8 @@ public class TableApiKeyRateLimiter : IApiKeyRateLimiter
             var entity = response.Value;
             var count = entity.GetInt32("Count") ?? 0;
 
-            if (count >= _options.MaxFetchesPerWindow)
-                return new RateLimitResult(false, count, _options.MaxFetchesPerWindow, windowResetsAt);
+            if (count >= tier.MaxFetchesPerWindow)
+                return new RateLimitResult(false, count, tier.MaxFetchesPerWindow, windowResetsAt, tier.Label);
 
             // Step 2a: Attempt conditional update
             var updatedEntity = new TableEntity(partitionKey, rowKey)
@@ -55,23 +76,23 @@ public class TableApiKeyRateLimiter : IApiKeyRateLimiter
             try
             {
                 await _table.UpdateEntityAsync(updatedEntity, entity.ETag, TableUpdateMode.Replace, ct);
-                return new RateLimitResult(true, count + 1, _options.MaxFetchesPerWindow, windowResetsAt);
+                return new RateLimitResult(true, count + 1, tier.MaxFetchesPerWindow, windowResetsAt);
             }
-            catch (RequestFailedException ex) when (ex.Status == 412) // Precondition Failed
+            catch (RequestFailedException ex) when (ex.Status == 412)
             {
                 // Retry once on ETag mismatch
                 var retryResponse = await _table.GetEntityAsync<TableEntity>(partitionKey, rowKey, cancellationToken: ct);
                 var retryEntity = retryResponse.Value;
                 var retryCount = retryEntity.GetInt32("Count") ?? 0;
-                if (retryCount >= _options.MaxFetchesPerWindow)
-                    return new RateLimitResult(false, retryCount, _options.MaxFetchesPerWindow, windowResetsAt);
+                if (retryCount >= tier.MaxFetchesPerWindow)
+                    return new RateLimitResult(false, retryCount, tier.MaxFetchesPerWindow, windowResetsAt, tier.Label);
 
                 var retryUpdatedEntity = new TableEntity(partitionKey, rowKey)
                 {
                     ["Count"] = retryCount + 1
                 };
                 await _table.UpdateEntityAsync(retryUpdatedEntity, retryEntity.ETag, TableUpdateMode.Replace, ct);
-                return new RateLimitResult(true, retryCount + 1, _options.MaxFetchesPerWindow, windowResetsAt);
+                return new RateLimitResult(true, retryCount + 1, tier.MaxFetchesPerWindow, windowResetsAt);
             }
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
@@ -79,7 +100,7 @@ public class TableApiKeyRateLimiter : IApiKeyRateLimiter
             // Entity doesn't exist — treat as count = 0
         }
 
-        // Step 2b: Entity didn't exist or we're here after 404 — attempt insert
+        // Step 2b: Entity didn't exist — attempt insert
         var newEntity = new TableEntity(partitionKey, rowKey)
         {
             ["Count"] = 1
@@ -87,31 +108,30 @@ public class TableApiKeyRateLimiter : IApiKeyRateLimiter
         try
         {
             await _table.AddEntityAsync(newEntity, ct);
-            return new RateLimitResult(true, 1, _options.MaxFetchesPerWindow, windowResetsAt);
+            return new RateLimitResult(true, 1, tier.MaxFetchesPerWindow, windowResetsAt);
         }
-        catch (RequestFailedException ex) when (ex.Status == 409) // Conflict — someone else inserted
+        catch (RequestFailedException ex) when (ex.Status == 409)
         {
-            // Retry once on conflict
+            // Conflict — someone else inserted; retry read
             try
             {
                 var response = await _table.GetEntityAsync<TableEntity>(partitionKey, rowKey, cancellationToken: ct);
                 var entity = response.Value;
                 var count = entity.GetInt32("Count") ?? 0;
-                if (count >= _options.MaxFetchesPerWindow)
-                    return new RateLimitResult(false, count, _options.MaxFetchesPerWindow, windowResetsAt);
+                if (count >= tier.MaxFetchesPerWindow)
+                    return new RateLimitResult(false, count, tier.MaxFetchesPerWindow, windowResetsAt, tier.Label);
 
                 var updatedEntity = new TableEntity(partitionKey, rowKey)
                 {
                     ["Count"] = count + 1
                 };
                 await _table.UpdateEntityAsync(updatedEntity, entity.ETag, TableUpdateMode.Replace, ct);
-                return new RateLimitResult(true, count + 1, _options.MaxFetchesPerWindow, windowResetsAt);
+                return new RateLimitResult(true, count + 1, tier.MaxFetchesPerWindow, windowResetsAt);
             }
             catch (RequestFailedException ex2) when (ex2.Status == 404)
             {
-                // Should not happen — but fallback to insert again
                 await _table.AddEntityAsync(newEntity, ct);
-                return new RateLimitResult(true, 1, _options.MaxFetchesPerWindow, windowResetsAt);
+                return new RateLimitResult(true, 1, tier.MaxFetchesPerWindow, windowResetsAt);
             }
         }
     }
