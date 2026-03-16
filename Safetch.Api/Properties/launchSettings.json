@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Safetch.Api": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:22899;http://localhost:22900"
+    }
+  }
+}

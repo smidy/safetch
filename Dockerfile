@@ -1,38 +1,47 @@
-﻿# Required environment variables (pass with -e or --env-file):
-#   AzureWebJobsStorage         - Storage connection string. Use "UseDevelopmentStorage=true" for Azurite.
-#   FUNCTIONS_WORKER_RUNTIME    - Must be "dotnet-isolated"
-#   RateLimit__WindowSeconds    - Rate limit window in seconds (e.g. 60)
-#   RateLimit__MaxRequests      - Max requests per window per session (e.g. 30)
+﻿# Optional environment variables (pass with -e or --env-file):
+#   ASPNETCORE_ENVIRONMENT                          - Set to Development for in-memory rate limiting (default: Production)
+#   FetchOptions__MaxResponseBytes                  - Max upstream response body size in bytes (default: 10485760)
+#   FetchOptions__TimeoutSeconds                    - Per-request HTTP timeout in seconds (default: 15)
+#   Safetch__RateLimit__Limits__0__MaxFetchesPerWindow - Max requests per window per caller identity (default: 100)
 #
-# Note: ASPNETCORE_ENVIRONMENT is set to "Development" in this image, which disables API key
-# authentication on /fetch and /token endpoints. This image is intended for local development
-# only. Do NOT use in production — deploy via Azure Functions directly for production workloads.
+# Note: This image ships with no authentication and uses InMemoryRateLimiter with a fixed "local"
+# caller identity. It is safe for local development. Before exposing to any network, add your own
+# authentication layer.
 
 # Stage 1: Build
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy solution and project files first for optimal layer caching
-COPY Safetch.sln .
+# Copy only the projects needed for build
 COPY Safetch.Api/Safetch.Api.csproj Safetch.Api/
 COPY Safetch.Core/Safetch.Core.csproj Safetch.Core/
 
 # Restore dependencies
-RUN dotnet restore Safetch.sln
+RUN dotnet restore Safetch.Api/Safetch.Api.csproj
 
 # Copy all source code
 COPY . .
 
-# Publish the Azure Functions app
-RUN dotnet publish Safetch.Api/Safetch.Api.csproj -c Release -o /app/publish --no-restore
+# Publish as framework-dependent (not self-contained) — matches aspnet:9.0 base
+RUN dotnet publish Safetch.Api/Safetch.Api.csproj \
+  -c Release \
+  -o /app/publish \
+  --no-restore
 
 # Stage 2: Runtime
-FROM mcr.microsoft.com/azure-functions/dotnet-isolated:4-dotnet-isolated9.0
+FROM mcr.microsoft.com/dotnet/aspnet:9.0
 
-# Set required environment variables for Azure Functions runtime
-ENV AzureWebJobsScriptRoot=/home/site/wwwroot
-ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
-ENV ASPNETCORE_ENVIRONMENT=Development
+# Set default URL binding
+ENV ASPNETCORE_URLS=http://+:8080
 
 # Copy published output from build stage
-COPY --from=build /app/publish /home/site/wwwroot
+COPY --from=build /app/publish /app
+
+# Expose port
+EXPOSE 8080
+
+# Set working directory to published output
+WORKDIR /app
+
+# Run the app
+ENTRYPOINT ["dotnet", "Safetch.Api.dll"]
