@@ -18,6 +18,10 @@ Safetch is a minimal, auditable, and secure HTTP fetch service designed for AI a
 
 Safetch is a .NET 9 solution with three projects: `Safetch.Core` (domain logic), `Safetch.Api` (ASP.NET Core Minimal API host), and `Safetch.Tests`. It uses `System.Text.Json` exclusively — no Newtonsoft.Json — and avoids unnecessary abstractions for observability and security control.
 
+## My Hosting
+
+I have an instance running in azure if anyone wants to grab a key here and use it [https://www.safetch.ai/](https://www.safetch.ai/)
+
 ## Self-Hosting
 
 ### Prerequisites
