@@ -30,7 +30,7 @@ public class HtmlSanitizerProcessor : IContentProcessor
             }
         }
 
-        // 2. Remove data-* attributes from every node
+        // 2. Remove data-* and on* attributes from every node
         var allNodes = doc.DocumentNode.SelectNodes("//*");
         if (allNodes != null)
         {
@@ -39,7 +39,7 @@ public class HtmlSanitizerProcessor : IContentProcessor
                 var attributes = node.Attributes.ToList();
                 foreach (var attr in attributes)
                 {
-                    if (attr.Name.StartsWith("data-"))
+                    if (attr.Name.StartsWith("data-") || attr.Name.StartsWith("on"))
                     {
                         node.Attributes.Remove(attr);
                     }
@@ -64,6 +64,16 @@ public class HtmlSanitizerProcessor : IContentProcessor
             foreach (var meta in metaNodes.ToList())
             {
                 meta.Remove();
+            }
+        }
+
+        // 5. Remove <script> and <style> elements
+        var scriptStyleNodes = doc.DocumentNode.SelectNodes("//script|//style");
+        if (scriptStyleNodes != null)
+        {
+            foreach (var node in scriptStyleNodes.ToList())
+            {
+                node.Remove();
             }
         }
 
