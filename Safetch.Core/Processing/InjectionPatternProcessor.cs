@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Safetch.Core.Processing;
 
@@ -77,6 +78,19 @@ public class InjectionPatternProcessor : IContentProcessor
         (R(@"unrestricted mode"),                  "JailbreakFraming",    InjectionSeverity.Medium),
     };
 
+    private readonly ILogger<InjectionPatternProcessor> _logger;
+
+    // Constructor used by DI
+    public InjectionPatternProcessor(ILogger<InjectionPatternProcessor> logger)
+    {
+        _logger = logger;
+    }
+
+    // Constructor used in tests (no logging)
+    public InjectionPatternProcessor() : this(Microsoft.Extensions.Logging.Abstractions.NullLogger<InjectionPatternProcessor>.Instance)
+    {
+    }
+
     public Task<ProcessorResult> ProcessAsync(string content, ProcessingContext ctx, CancellationToken ct)
     {
         var injectionWarnings = new List<InjectionWarning>();
@@ -90,6 +104,9 @@ public class InjectionPatternProcessor : IContentProcessor
             }
             catch (RegexMatchTimeoutException)
             {
+                _logger.LogWarning(
+                    "InjectionPatternProcessor: regex timeout on pattern {Pattern} — treating as no match",
+                    regex.ToString());
                 matched = false; // timed out — treat as no match, do not block request
             }
 
