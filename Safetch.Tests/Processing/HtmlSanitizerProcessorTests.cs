@@ -162,4 +162,23 @@ public class HtmlSanitizerProcessorTests
         Assert.DoesNotContain("hidden injection", result.Content);
         Assert.Contains("<p>visible</p>", result.Content);
     }
+
+    [Fact]
+    public async Task PreservesWhiteBackgroundColorElement()
+    {
+        // background-color:white is legitimate — must NOT be stripped
+        var html = @"<div style=""background-color: rgb(255, 255, 255)"">visible content</div>";
+        var result = await _processor.ProcessAsync(html, new ProcessingContext("text/html", "http://example.com"), default);
+        Assert.Contains("visible content", result.Content);
+    }
+
+    [Fact]
+    public async Task RemovesRgbLevel4WhiteColorElement()
+    {
+        // CSS Color Level 4 space-separated syntax: rgb(255 255 255)
+        var html = @"<span style=""color: rgb(255 255 255)"">hidden injection</span><p>visible</p>";
+        var result = await _processor.ProcessAsync(html, new ProcessingContext("text/html", "http://example.com"), default);
+        Assert.DoesNotContain("hidden injection", result.Content);
+        Assert.Contains("<p>visible</p>", result.Content);
+    }
 }

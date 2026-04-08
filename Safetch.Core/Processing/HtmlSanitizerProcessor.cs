@@ -133,6 +133,13 @@ public class HtmlSanitizerProcessor : IContentProcessor
     private static bool IsInvisibleColor(string normalizedStyle)
     {
         var colorIdx = normalizedStyle.IndexOf("color:", StringComparison.Ordinal);
+        // Ensure we matched the 'color' property, not 'background-color' or similar
+        while (colorIdx >= 0)
+        {
+            if (colorIdx == 0 || normalizedStyle[colorIdx - 1] == ';')
+                break;
+            colorIdx = normalizedStyle.IndexOf("color:", colorIdx + 1, StringComparison.Ordinal);
+        }
         if (colorIdx < 0) return false;
 
         var valueStart = colorIdx + 6;
@@ -141,12 +148,13 @@ public class HtmlSanitizerProcessor : IContentProcessor
             ? normalizedStyle.Substring(valueStart, semiIdx - valueStart)
             : normalizedStyle.Substring(valueStart);
 
-        // Collapse internal spaces for uniform comparison
         var compact = colorValue.Replace(" ", "");
 
         if (compact == "rgb(255,255,255)") return true;
 
-        // rgba(r,g,b,0) or rgba(r,g,b,0.0) — any colour with zero alpha is invisible
+        // CSS Color Level 4: space-separated rgb without commas, e.g. rgb(255 255 255)
+        if (compact == "rgb(255255255)") return true;
+
         return Regex.IsMatch(compact, @"^rgba\(\d+,\d+,\d+,0(?:\.0*)?\)$");
     }
 
@@ -158,7 +166,7 @@ public class HtmlSanitizerProcessor : IContentProcessor
             !normalizedStyle.Contains("position:fixed"))
             return false;
 
-        // Match ";left:-NNNpx" or ";top:-NNNpx" (3+ digit magnitude = ≥100px off-screen)
-        return Regex.IsMatch(normalizedStyle, @"(?:^|;)(?:left|top):-\d{3,}");
+        // Match "left:-NNNpx" or "top:-NNNpx" (3+ digit px magnitude = ≥100px off-screen)
+        return Regex.IsMatch(normalizedStyle, @"(?:^|;)(?:left|top):-\d{3,}px");
     }
 }
