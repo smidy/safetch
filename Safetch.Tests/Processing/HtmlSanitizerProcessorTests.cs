@@ -126,4 +126,40 @@ public class HtmlSanitizerProcessorTests
         Assert.DoesNotContain("onfocus", result.Content);
         Assert.Contains("text", result.Content);
     }
+
+    [Fact]
+    public async Task RemovesRgbWhiteColorElement()
+    {
+        var html = @"<span style=""color: rgb(255, 255, 255)"">hidden injection</span><p>visible</p>";
+        var result = await _processor.ProcessAsync(html, new ProcessingContext("text/html", "http://example.com"), default);
+        Assert.DoesNotContain("hidden injection", result.Content);
+        Assert.Contains("<p>visible</p>", result.Content);
+    }
+
+    [Fact]
+    public async Task RemovesRgbaZeroAlphaElement()
+    {
+        var html = @"<span style=""color: rgba(255, 0, 0, 0)"">hidden injection</span><p>visible</p>";
+        var result = await _processor.ProcessAsync(html, new ProcessingContext("text/html", "http://example.com"), default);
+        Assert.DoesNotContain("hidden injection", result.Content);
+        Assert.Contains("<p>visible</p>", result.Content);
+    }
+
+    [Fact]
+    public async Task RemovesOffScreenPositionedElement()
+    {
+        var html = @"<div style=""position: absolute; left: -9999px"">hidden injection</div><p>visible</p>";
+        var result = await _processor.ProcessAsync(html, new ProcessingContext("text/html", "http://example.com"), default);
+        Assert.DoesNotContain("hidden injection", result.Content);
+        Assert.Contains("<p>visible</p>", result.Content);
+    }
+
+    [Fact]
+    public async Task RemovesOffScreenTopPositionedElement()
+    {
+        var html = @"<div style=""position: fixed; top: -999px"">hidden injection</div><p>visible</p>";
+        var result = await _processor.ProcessAsync(html, new ProcessingContext("text/html", "http://example.com"), default);
+        Assert.DoesNotContain("hidden injection", result.Content);
+        Assert.Contains("<p>visible</p>", result.Content);
+    }
 }
