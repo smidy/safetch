@@ -47,6 +47,22 @@ public class InjectionPatternProcessor : IContentProcessor
         (R(@"\<\|user\|\>"),                       "ModelFormatMarker",   InjectionSeverity.Informational),
         (R(@"\<\|assistant\|\>"),                  "ModelFormatMarker",   InjectionSeverity.Informational),
 
+        // Llama 3 role boundary tokens
+        (R(@"\<\|start_header_id\|\>"),            "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"\<\|end_header_id\|\>"),              "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"\<\|eot_id\|\>"),                     "ModelFormatMarker",   InjectionSeverity.Informational),
+
+        // Gemma / Gemma 2
+        (R(@"<start_of_turn>"),                    "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"<end_of_turn>"),                      "ModelFormatMarker",   InjectionSeverity.Informational),
+
+        // Phi-4
+        (R(@"\<\|end\|\>"),                        "ModelFormatMarker",   InjectionSeverity.Informational),
+
+        // DeepSeek sentence boundary tokens (Unicode private use characters in token names)
+        (R(@"<｜begin▁of▁sentence｜>"),            "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"<｜end▁of▁sentence｜>"),              "ModelFormatMarker",   InjectionSeverity.Informational),
+
         // DataExfiltration — High
         (R(@"send this to"),                       "DataExfiltration",    InjectionSeverity.High),
         (R(@"transmit this"),                      "DataExfiltration",    InjectionSeverity.High),
