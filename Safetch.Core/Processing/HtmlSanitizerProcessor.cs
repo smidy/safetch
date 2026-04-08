@@ -159,14 +159,15 @@ public class HtmlSanitizerProcessor : IContentProcessor
     }
 
     // Detects position:absolute or position:fixed combined with a large negative
-    // left or top offset (100px or more) — the classic "off-screen hiding" pattern.
+    // left or top offset (100 units or more) — the classic "off-screen hiding" pattern.
     private static bool IsOffScreen(string normalizedStyle)
     {
         if (!normalizedStyle.Contains("position:absolute") &&
             !normalizedStyle.Contains("position:fixed"))
             return false;
 
-        // Match "left:-NNNpx" or "top:-NNNpx" (3+ digit px magnitude = ≥100px off-screen)
-        return Regex.IsMatch(normalizedStyle, @"(?:^|;)(?:left|top):-\d{3,}px");
+        // Match "left:-NNNunit" or "top:-NNNunit" (3+ digit magnitude = ≥100 units off-screen)
+        // Covers px, em, rem, vh, vw — all units that can push content off-screen at this scale
+        return Regex.IsMatch(normalizedStyle, @"(?:^|;)(?:left|top):-\d{3,}(?:px|em|rem|vh|vw)");
     }
 }

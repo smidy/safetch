@@ -181,4 +181,13 @@ public class HtmlSanitizerProcessorTests
         Assert.DoesNotContain("hidden injection", result.Content);
         Assert.Contains("<p>visible</p>", result.Content);
     }
+
+    [Fact]
+    public async Task RemovesOffScreenEmPositionedElement()
+    {
+        var html = @"<div style=""position: absolute; left: -9999em"">hidden injection</div><p>visible</p>";
+        var result = await _processor.ProcessAsync(html, new ProcessingContext("text/html", "http://example.com"), default);
+        Assert.DoesNotContain("hidden injection", result.Content);
+        Assert.Contains("<p>visible</p>", result.Content);
+    }
 }
