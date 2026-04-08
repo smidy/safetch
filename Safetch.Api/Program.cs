@@ -64,7 +64,7 @@ app.MapPost("/api/fetch", async (HttpContext ctx, IFetchService fetchService, IA
     {
         Url = dto?.Url,
         Mode = ParseMode(dto?.Mode),
-        SpotlightingMode = ParseSpotlightingMode(dto?.SpotlightingModeStr)
+        SpotlightingMode = ParseSpotlightingMode(dto?.SpotlightingMode)
     };
 
     if (string.IsNullOrWhiteSpace(fetchRequest.Url))
@@ -180,4 +180,4 @@ static SpotlightingMode ParseSpotlightingMode(string? mode) => mode?.ToLowerInva
     _ => SpotlightingMode.Delimiting
 };
 
-record FetchRequestDto(string? Url, string? Mode, string? IdentityKey, string? SpotlightingModeStr);
+record FetchRequestDto(string? Url, string? Mode, string? IdentityKey, string? SpotlightingMode);
