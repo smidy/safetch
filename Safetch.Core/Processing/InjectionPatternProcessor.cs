@@ -54,7 +54,7 @@ public class InjectionPatternProcessor : IContentProcessor
         (R(@"POST to https?://"),                  "DataExfiltration",    InjectionSeverity.High),
         (R(@"call this URL"),                      "DataExfiltration",    InjectionSeverity.High),
         (R(@"fetch https?://"),                    "DataExfiltration",    InjectionSeverity.High),
-        (R(@"GET https?://"),                      "DataExfiltration",    InjectionSeverity.High),
+        (R(@"\bGET https?://"),                     "DataExfiltration",    InjectionSeverity.High),
         (R(@"\bcurl\s+https?://"),                 "DataExfiltration",    InjectionSeverity.High),
         (R(@"\bwget\s+https?://"),                 "DataExfiltration",    InjectionSeverity.High),
 
@@ -65,7 +65,7 @@ public class InjectionPatternProcessor : IContentProcessor
         (R(@"run the tool"),                       "ToolCallCoercion",    InjectionSeverity.High),
         (R(@"use the function"),                   "ToolCallCoercion",    InjectionSeverity.High),
         (R(@"<tool_call>"),                        "ToolCallCoercion",    InjectionSeverity.High),
-        (R(@"\btool_name\b"),                      "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"""tool_name""\s*:"),                   "ToolCallCoercion",    InjectionSeverity.High),
 
         // AuthorityOverride — High
         (R(@"SYSTEM OVERRIDE"),                    "AuthorityOverride",   InjectionSeverity.High),
