@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Safetch.Core.Processing;
@@ -120,5 +121,17 @@ public class InjectionPatternProcessorTests
         var match = Assert.Single(result.InjectionWarnings, w => w.Category == "InstructionOverride");
         Assert.Equal(InjectionSeverity.Medium, match.Severity);
         Assert.Equal(@"ignore previous instructions", match.PatternMatched);
+    }
+
+    [Fact]
+    public async Task LargeCleanContentProcessesQuickly()
+    {
+        // ~1 MB of benign repeated text — no injection patterns
+        var largeContent = string.Concat(Enumerable.Repeat("The quick brown fox jumps over the lazy dog. ", 23000));
+        var sw = Stopwatch.StartNew();
+        var result = await _processor.ProcessAsync(largeContent, new ProcessingContext("text/plain", "http://example.com"), default);
+        sw.Stop();
+        Assert.Empty(result.InjectionWarnings);
+        Assert.True(sw.ElapsedMilliseconds < 5000, $"Processing took {sw.ElapsedMilliseconds}ms — expected < 5000ms");
     }
 }
