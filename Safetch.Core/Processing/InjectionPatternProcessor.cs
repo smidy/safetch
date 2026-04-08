@@ -26,11 +26,17 @@ public class InjectionPatternProcessor : IContentProcessor
         (R(@"ignore previous instructions"),       "InstructionOverride", InjectionSeverity.Medium),
         (R(@"ignore all previous"),                "InstructionOverride", InjectionSeverity.Medium),
         (R(@"disregard previous"),                 "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"forget everything"),                  "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"new instructions follow"),            "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"override all instructions"),          "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"clear your instructions"),            "InstructionOverride", InjectionSeverity.Medium),
 
         // PersonaHijacking — Medium
         (R(@"you are now"),                        "PersonaHijacking",    InjectionSeverity.Medium),
         (R(@"act as"),                             "PersonaHijacking",    InjectionSeverity.Medium),
         (R(@"new persona"),                        "PersonaHijacking",    InjectionSeverity.Medium),
+        (R(@"pretend you are"),                    "PersonaHijacking",    InjectionSeverity.Medium),
+        (R(@"roleplay as"),                        "PersonaHijacking",    InjectionSeverity.Medium),
 
         // ModelFormatMarker — Informational
         (R(@"system prompt"),                      "ModelFormatMarker",   InjectionSeverity.Informational),
@@ -48,6 +54,9 @@ public class InjectionPatternProcessor : IContentProcessor
         (R(@"POST to https?://"),                  "DataExfiltration",    InjectionSeverity.High),
         (R(@"call this URL"),                      "DataExfiltration",    InjectionSeverity.High),
         (R(@"fetch https?://"),                    "DataExfiltration",    InjectionSeverity.High),
+        (R(@"GET https?://"),                      "DataExfiltration",    InjectionSeverity.High),
+        (R(@"\bcurl\s+https?://"),                 "DataExfiltration",    InjectionSeverity.High),
+        (R(@"\bwget\s+https?://"),                 "DataExfiltration",    InjectionSeverity.High),
 
         // ToolCallCoercion — High
         (R(@"call the \w+ tool"),                  "ToolCallCoercion",    InjectionSeverity.High),
@@ -55,6 +64,8 @@ public class InjectionPatternProcessor : IContentProcessor
         (R(@"execute the tool"),                   "ToolCallCoercion",    InjectionSeverity.High),
         (R(@"run the tool"),                       "ToolCallCoercion",    InjectionSeverity.High),
         (R(@"use the function"),                   "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"<tool_call>"),                        "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"\btool_name\b"),                      "ToolCallCoercion",    InjectionSeverity.High),
 
         // AuthorityOverride — High
         (R(@"SYSTEM OVERRIDE"),                    "AuthorityOverride",   InjectionSeverity.High),
@@ -76,6 +87,8 @@ public class InjectionPatternProcessor : IContentProcessor
         (R(@"\bDAN\b"),                            "JailbreakFraming",    InjectionSeverity.Medium),
         (R(@"\bjailbreak\b"),                      "JailbreakFraming",    InjectionSeverity.Medium),
         (R(@"unrestricted mode"),                  "JailbreakFraming",    InjectionSeverity.Medium),
+        (R(@"do anything now"),                    "JailbreakFraming",    InjectionSeverity.Medium),
+        (R(@"without any restrictions"),           "JailbreakFraming",    InjectionSeverity.Medium),
     };
 
     private readonly ILogger<InjectionPatternProcessor> _logger;
