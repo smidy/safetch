@@ -155,7 +155,15 @@ public class HtmlSanitizerProcessor : IContentProcessor
         // CSS Color Level 4: space-separated rgb without commas, e.g. rgb(255 255 255)
         if (compact == "rgb(255255255)") return true;
 
-        return Regex.IsMatch(compact, @"^rgba\(\d+,\d+,\d+,0(?:\.0*)?\)$");
+        // CSS Color Level 3: rgba with zero alpha, comma-separated, e.g. rgba(255,0,0,0)
+        if (Regex.IsMatch(compact, @"^rgba\(\d+,\d+,\d+,0(?:\.0*)?\)$")) return true;
+
+        // CSS Color Level 4: space-separated with slash, e.g. rgba(255 0 0 / 0).
+        // After space removal the compact form is rgba(NNN/0) where NNN is the concatenation
+        // of the three channel values; we only need to verify the alpha (after '/') is zero.
+        if (Regex.IsMatch(compact, @"^rgba\(\d+/0(?:\.0*)?\)$")) return true;
+
+        return false;
     }
 
     // Detects position:absolute or position:fixed combined with a large negative

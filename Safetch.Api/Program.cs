@@ -176,7 +176,7 @@ static bool IsValidIdentityKey(string key)
 
 static SpotlightingMode ParseSpotlightingMode(string? mode) => mode?.ToLowerInvariant() switch
 {
-    "encoding" => SpotlightingMode.Encoding,
+    "base64" => SpotlightingMode.Base64,
     _ => SpotlightingMode.Delimiting
 };
 

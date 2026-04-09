@@ -108,23 +108,35 @@ public class InjectionPatternProcessor : IContentProcessor
     };
 
     private readonly ILogger<InjectionPatternProcessor> _logger;
+    // The active pattern set for this instance. Defaults to the shared compiled set;
+    // an internal constructor allows tests to inject a custom set (e.g. to exercise timeout).
+    private readonly (Regex Pattern, string Category, InjectionSeverity Severity)[] _instancePatterns;
 
     // Constructor used by DI
     public InjectionPatternProcessor(ILogger<InjectionPatternProcessor> logger)
     {
         _logger = logger;
+        _instancePatterns = _patterns;
     }
 
-    // Constructor used in tests (no logging)
+    // Constructor used in tests (no logging, default patterns)
     public InjectionPatternProcessor() : this(Microsoft.Extensions.Logging.Abstractions.NullLogger<InjectionPatternProcessor>.Instance)
     {
+    }
+
+    // Constructor used in tests that need to inject a custom pattern set
+    // (e.g. to verify the RegexMatchTimeoutException catch path fires correctly).
+    internal InjectionPatternProcessor((Regex Pattern, string Category, InjectionSeverity Severity)[] patterns)
+        : this(Microsoft.Extensions.Logging.Abstractions.NullLogger<InjectionPatternProcessor>.Instance)
+    {
+        _instancePatterns = patterns;
     }
 
     public Task<ProcessorResult> ProcessAsync(string content, ProcessingContext ctx, CancellationToken ct)
     {
         var injectionWarnings = new List<InjectionWarning>();
 
-        foreach (var (regex, category, severity) in _patterns)
+        foreach (var (regex, category, severity) in _instancePatterns)
         {
             bool matched;
             try

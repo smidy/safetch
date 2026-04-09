@@ -290,4 +290,29 @@ public class InjectionPatternProcessorTests
         var result = await _processor.ProcessAsync(content, new ProcessingContext("text/plain", "http://example.com"), default);
         Assert.Contains(result.InjectionWarnings, w => w.Category == "ModelFormatMarker" && w.Severity == InjectionSeverity.Informational);
     }
+
+    [Fact]
+    public async Task RegexTimeout_TreatsAsNoMatchAndDoesNotThrow()
+    {
+        // (a+)+b catastrophically backtracks on a string of 'a' with no 'b'.
+        // A 5ms timeout ensures the exception fires reliably without slowing the test suite.
+        var catastrophicPattern = new System.Text.RegularExpressions.Regex(
+            @"(a+)+b",
+            System.Text.RegularExpressions.RegexOptions.Compiled,
+            TimeSpan.FromMilliseconds(5));
+
+        var processor = new InjectionPatternProcessor(
+            new[] { (catastrophicPattern, "Test", InjectionSeverity.High) });
+
+        // 30 'a' chars with no 'b': forces exhaustive backtracking that exceeds 5ms
+        var adversarialInput = new string('a', 30);
+
+        var result = await processor.ProcessAsync(
+            adversarialInput,
+            new ProcessingContext("text/plain", "http://example.com"),
+            default);
+
+        // Timeout is caught and treated as no match — no exception, no warnings
+        Assert.Empty(result.InjectionWarnings);
+    }
 }

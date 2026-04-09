@@ -190,4 +190,15 @@ public class HtmlSanitizerProcessorTests
         Assert.DoesNotContain("hidden injection", result.Content);
         Assert.Contains("<p>visible</p>", result.Content);
     }
+
+    [Fact]
+    public async Task RemovesRgbaLevel4SlashSyntaxZeroAlphaElement()
+    {
+        // CSS Color Level 4 space-separated with slash: rgba(R G B / A)
+        // e.g. rgba(255 0 0 / 0) is fully transparent — an active EchoLeak bypass vector
+        var html = @"<span style=""color: rgba(255 0 0 / 0)"">hidden injection</span><p>visible</p>";
+        var result = await _processor.ProcessAsync(html, new ProcessingContext("text/html", "http://example.com"), default);
+        Assert.DoesNotContain("hidden injection", result.Content);
+        Assert.Contains("<p>visible</p>", result.Content);
+    }
 }
