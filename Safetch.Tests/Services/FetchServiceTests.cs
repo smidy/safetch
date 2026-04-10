@@ -30,7 +30,7 @@ public class FetchServiceTests
         return new ContentProcessorPipeline(Enumerable.Empty<OrderedProcessor>());
     }
 
-    private static FetchService CreateSut(IEnumerable<OrderedGuard> guards, SafeHttpFetcher? fetcher = null, ContentProcessorPipeline? pipeline = null)
+    private static FetchService CreateSut(IEnumerable<OrderedGuard> guards, ISafeHttpFetcher? fetcher = null, ContentProcessorPipeline? pipeline = null)
         => new FetchService(guards, fetcher ?? RealFetcher(), NullLogger<FetchService>.Instance, pipeline ?? MockPipeline());
 
     // ── Guard pipeline ────────────────────────────────────────────────────────

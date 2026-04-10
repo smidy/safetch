@@ -30,7 +30,7 @@ builder.Services.AddScoped<ContentProcessorPipeline>();
 
 // HTTP fetcher
 builder.Services.AddOptions<FetchOptions>().BindConfiguration("FetchOptions");
-builder.Services.AddSingleton<SafeHttpFetcher>();
+builder.Services.AddSingleton<ISafeHttpFetcher, SafeHttpFetcher>();
 
 // Rate limiting (in-memory only — no Azure dependency in this host)
 builder.Services.AddMemoryCache();
@@ -172,3 +172,5 @@ static bool IsValidIdentityKey(string key)
 }
 
 record FetchRequestDto(string? Url, string? Mode, string? IdentityKey);
+
+public partial class Program { }

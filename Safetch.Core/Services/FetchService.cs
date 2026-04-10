@@ -13,13 +13,13 @@ namespace Safetch.Core.Services;
 public class FetchService : IFetchService
 {
     private readonly IEnumerable<OrderedGuard> _guards;
-    private readonly SafeHttpFetcher _fetcher;
+    private readonly ISafeHttpFetcher _fetcher;
     private readonly ILogger<FetchService> _logger;
     private readonly ContentProcessorPipeline _pipeline;
 
     public FetchService(
         IEnumerable<OrderedGuard> guards,
-        SafeHttpFetcher fetcher,
+        ISafeHttpFetcher fetcher,
         ILogger<FetchService> logger,
         ContentProcessorPipeline pipeline)
     {

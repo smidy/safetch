@@ -20,7 +20,7 @@ namespace Safetch.Core.Http;
 /// IP pinning via SocketsHttpHandler.ConnectCallback, and streaming body size enforcement.
 /// Owns the HttpClient lifecycle — do not register a named/typed HttpClient for it.
 /// </summary>
-public sealed class SafeHttpFetcher
+public sealed class SafeHttpFetcher : ISafeHttpFetcher
 {
     private readonly FetchOptions _options;
     private readonly ILogger<SafeHttpFetcher> _logger;
