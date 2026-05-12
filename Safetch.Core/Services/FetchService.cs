@@ -104,7 +104,7 @@ public class FetchService : IFetchService
             ? Guid.NewGuid().ToString("N")[..8]
             : request.IdentityKey;
 
-        var context = new ProcessingContext(effectiveMimeType, request.Url!, effectiveKey);
+        var context = new ProcessingContext(effectiveMimeType, request.Url!, effectiveKey, request.SpotlightingMode);
         var processorResult = await _pipeline.RunAsync(content, context, ct);
         
         return new FetchResponse

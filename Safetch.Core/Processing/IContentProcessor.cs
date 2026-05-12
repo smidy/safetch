@@ -1,4 +1,6 @@
-﻿namespace Safetch.Core.Processing;
+﻿using Safetch.Core.Models;
+
+namespace Safetch.Core.Processing;
 
 public enum InjectionSeverity
 {
@@ -27,4 +29,9 @@ public record ProcessorResult(
 /// <param name="MimeType">Parsed MIME type only — e.g. "text/html", not "text/html; charset=utf-8".</param>
 /// <param name="SourceUrl">Originating URL for context.</param>
 /// <param name="IdentityKey">Optional caller-supplied key embedded in spotlighting boundary tags.</param>
-public record ProcessingContext(string MimeType, string SourceUrl, string? IdentityKey = null);
+/// <param name="SpotlightingMode">Controls how untrusted content is wrapped. Default: Delimiting.</param>
+public record ProcessingContext(
+    string MimeType,
+    string SourceUrl,
+    string? IdentityKey = null,
+    SpotlightingMode SpotlightingMode = SpotlightingMode.Delimiting);

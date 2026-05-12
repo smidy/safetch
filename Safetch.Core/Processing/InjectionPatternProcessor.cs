@@ -1,7 +1,9 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Safetch.Core.Processing;
 
@@ -9,74 +11,148 @@ public class InjectionPatternProcessor : IContentProcessor
 {
     public string Name => "InjectionPattern";
 
-    private static readonly (string Pattern, string Category, InjectionSeverity Severity)[] PatternMap =
+    // Timeout long enough for legitimate large content; short enough to abort
+    // catastrophic backtracking before it blocks the request pipeline.
+    private static readonly TimeSpan _matchTimeout = TimeSpan.FromMilliseconds(200);
+
+    private static Regex R(string pattern) =>
+        new(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, _matchTimeout);
+
+    // Compiled at startup; each carries a per-match timeout to guard against
+    // catastrophic backtracking on adversarially crafted content.
+    private static readonly (Regex Pattern, string Category, InjectionSeverity Severity)[] _patterns =
     {
         // InstructionOverride — Medium
-        (@"ignore previous instructions",       "InstructionOverride", InjectionSeverity.Medium),
-        (@"ignore all previous",                "InstructionOverride", InjectionSeverity.Medium),
-        (@"disregard previous",                 "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"ignore previous instructions"),       "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"ignore all previous"),                "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"disregard previous"),                 "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"forget everything"),                  "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"new instructions follow"),            "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"override all instructions"),          "InstructionOverride", InjectionSeverity.Medium),
+        (R(@"clear your instructions"),            "InstructionOverride", InjectionSeverity.Medium),
 
         // PersonaHijacking — Medium
-        (@"you are now",                        "PersonaHijacking",    InjectionSeverity.Medium),
-        (@"act as",                             "PersonaHijacking",    InjectionSeverity.Medium),
-        (@"new persona",                        "PersonaHijacking",    InjectionSeverity.Medium),
+        (R(@"you are now"),                        "PersonaHijacking",    InjectionSeverity.Medium),
+        (R(@"act as"),                             "PersonaHijacking",    InjectionSeverity.Medium),
+        (R(@"new persona"),                        "PersonaHijacking",    InjectionSeverity.Medium),
+        (R(@"pretend you are"),                    "PersonaHijacking",    InjectionSeverity.Medium),
+        (R(@"roleplay as"),                        "PersonaHijacking",    InjectionSeverity.Medium),
 
         // ModelFormatMarker — Informational
-        (@"system prompt",                      "ModelFormatMarker",   InjectionSeverity.Informational),
-        (@"\<\|im_start\|\>",                   "ModelFormatMarker",   InjectionSeverity.Informational),
-        (@"\[INST\]",                           "ModelFormatMarker",   InjectionSeverity.Informational),
-        (@"### Instruction",                    "ModelFormatMarker",   InjectionSeverity.Informational),
-        (@"\<\|system\|\>",                     "ModelFormatMarker",   InjectionSeverity.Informational),
-        (@"\<\|user\|\>",                       "ModelFormatMarker",   InjectionSeverity.Informational),
-        (@"\<\|assistant\|\>",                  "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"system prompt"),                      "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"\<\|im_start\|\>"),                   "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"\[INST\]"),                           "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"### Instruction"),                    "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"\<\|system\|\>"),                     "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"\<\|user\|\>"),                       "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"\<\|assistant\|\>"),                  "ModelFormatMarker",   InjectionSeverity.Informational),
+
+        // Llama 3 role boundary tokens
+        (R(@"\<\|start_header_id\|\>"),            "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"\<\|end_header_id\|\>"),              "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"\<\|eot_id\|\>"),                     "ModelFormatMarker",   InjectionSeverity.Informational),
+
+        // Gemma / Gemma 2
+        (R(@"<start_of_turn>"),                    "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"<end_of_turn>"),                      "ModelFormatMarker",   InjectionSeverity.Informational),
+
+        // Phi-4
+        (R(@"\<\|end\|\>"),                        "ModelFormatMarker",   InjectionSeverity.Informational),
+
+        // DeepSeek sentence boundary tokens (Unicode private use characters in token names)
+        (R(@"<｜begin▁of▁sentence｜>"),            "ModelFormatMarker",   InjectionSeverity.Informational),
+        (R(@"<｜end▁of▁sentence｜>"),              "ModelFormatMarker",   InjectionSeverity.Informational),
 
         // DataExfiltration — High
-        (@"send this to",                       "DataExfiltration",    InjectionSeverity.High),
-        (@"transmit this",                      "DataExfiltration",    InjectionSeverity.High),
-        (@"exfiltrate",                         "DataExfiltration",    InjectionSeverity.High),
-        (@"POST to https?://",                  "DataExfiltration",    InjectionSeverity.High),
-        (@"call this URL",                      "DataExfiltration",    InjectionSeverity.High),
-        (@"fetch https?://",                    "DataExfiltration",    InjectionSeverity.High),
+        (R(@"send this to"),                       "DataExfiltration",    InjectionSeverity.High),
+        (R(@"transmit this"),                      "DataExfiltration",    InjectionSeverity.High),
+        (R(@"exfiltrate"),                         "DataExfiltration",    InjectionSeverity.High),
+        (R(@"POST to https?://"),                  "DataExfiltration",    InjectionSeverity.High),
+        (R(@"call this URL"),                      "DataExfiltration",    InjectionSeverity.High),
+        (R(@"fetch https?://"),                    "DataExfiltration",    InjectionSeverity.High),
+        (R(@"\bGET https?://"),                     "DataExfiltration",    InjectionSeverity.High),
+        (R(@"\bcurl\s+https?://"),                 "DataExfiltration",    InjectionSeverity.High),
+        (R(@"\bwget\s+https?://"),                 "DataExfiltration",    InjectionSeverity.High),
 
         // ToolCallCoercion — High
-        (@"call the \w+ tool",                  "ToolCallCoercion",    InjectionSeverity.High),
-        (@"invoke the",                         "ToolCallCoercion",    InjectionSeverity.High),
-        (@"execute the tool",                   "ToolCallCoercion",    InjectionSeverity.High),
-        (@"run the tool",                       "ToolCallCoercion",    InjectionSeverity.High),
-        (@"use the function",                   "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"call the \w+ tool"),                  "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"invoke the"),                         "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"execute the tool"),                   "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"run the tool"),                       "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"use the function"),                   "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"<tool_call>"),                        "ToolCallCoercion",    InjectionSeverity.High),
+        (R(@"""tool_name""\s*:"),                   "ToolCallCoercion",    InjectionSeverity.High),
 
         // AuthorityOverride — High
-        (@"SYSTEM OVERRIDE",                    "AuthorityOverride",   InjectionSeverity.High),
-        (@"new instructions from",              "AuthorityOverride",   InjectionSeverity.High),
-        (@"acting as administrator",            "AuthorityOverride",   InjectionSeverity.High),
-        (@"operator override",                  "AuthorityOverride",   InjectionSeverity.High),
+        (R(@"SYSTEM OVERRIDE"),                    "AuthorityOverride",   InjectionSeverity.High),
+        (R(@"new instructions from"),              "AuthorityOverride",   InjectionSeverity.High),
+        (R(@"acting as administrator"),            "AuthorityOverride",   InjectionSeverity.High),
+        (R(@"operator override"),                  "AuthorityOverride",   InjectionSeverity.High),
 
-        // MemoryPoisoning — High (compound patterns to reduce false positives)
-        (@"remember\b.{0,60}\btrusted\b",       "MemoryPoisoning",     InjectionSeverity.High),
-        (@"in future conversations",            "MemoryPoisoning",     InjectionSeverity.High),
-        (@"authoritative source for",           "MemoryPoisoning",     InjectionSeverity.High),
-        (@"keep in your memory",                "MemoryPoisoning",     InjectionSeverity.High),
-        (@"cite this as",                       "MemoryPoisoning",     InjectionSeverity.High),
-        (@"always cite",                        "MemoryPoisoning",     InjectionSeverity.High),
+        // MemoryPoisoning — High
+        (R(@"remember\b.{0,60}\btrusted\b"),       "MemoryPoisoning",     InjectionSeverity.High),
+        (R(@"in future conversations"),            "MemoryPoisoning",     InjectionSeverity.High),
+        (R(@"authoritative source for"),           "MemoryPoisoning",     InjectionSeverity.High),
+        (R(@"keep in your memory"),                "MemoryPoisoning",     InjectionSeverity.High),
+        (R(@"cite this as"),                       "MemoryPoisoning",     InjectionSeverity.High),
+        (R(@"always cite"),                        "MemoryPoisoning",     InjectionSeverity.High),
 
         // JailbreakFraming — Medium
-        (@"god mode",                           "JailbreakFraming",    InjectionSeverity.Medium),
-        (@"developer mode",                     "JailbreakFraming",    InjectionSeverity.Medium),
-        (@"\bDAN\b",                            "JailbreakFraming",    InjectionSeverity.Medium),
-        (@"\bjailbreak\b",                      "JailbreakFraming",    InjectionSeverity.Medium),
-        (@"unrestricted mode",                  "JailbreakFraming",    InjectionSeverity.Medium),
+        (R(@"god mode"),                           "JailbreakFraming",    InjectionSeverity.Medium),
+        (R(@"developer mode"),                     "JailbreakFraming",    InjectionSeverity.Medium),
+        (R(@"\bDAN\b"),                            "JailbreakFraming",    InjectionSeverity.Medium),
+        (R(@"\bjailbreak\b"),                      "JailbreakFraming",    InjectionSeverity.Medium),
+        (R(@"unrestricted mode"),                  "JailbreakFraming",    InjectionSeverity.Medium),
+        (R(@"do anything now"),                    "JailbreakFraming",    InjectionSeverity.Medium),
+        (R(@"without any restrictions"),           "JailbreakFraming",    InjectionSeverity.Medium),
     };
+
+    private readonly ILogger<InjectionPatternProcessor> _logger;
+    // The active pattern set for this instance. Defaults to the shared compiled set;
+    // an internal constructor allows tests to inject a custom set (e.g. to exercise timeout).
+    private readonly (Regex Pattern, string Category, InjectionSeverity Severity)[] _instancePatterns;
+
+    // Constructor used by DI
+    public InjectionPatternProcessor(ILogger<InjectionPatternProcessor> logger)
+    {
+        _logger = logger;
+        _instancePatterns = _patterns;
+    }
+
+    // Constructor used in tests (no logging, default patterns)
+    public InjectionPatternProcessor() : this(Microsoft.Extensions.Logging.Abstractions.NullLogger<InjectionPatternProcessor>.Instance)
+    {
+    }
+
+    // Constructor used in tests that need to inject a custom pattern set
+    // (e.g. to verify the RegexMatchTimeoutException catch path fires correctly).
+    internal InjectionPatternProcessor((Regex Pattern, string Category, InjectionSeverity Severity)[] patterns)
+        : this(Microsoft.Extensions.Logging.Abstractions.NullLogger<InjectionPatternProcessor>.Instance)
+    {
+        _instancePatterns = patterns;
+    }
 
     public Task<ProcessorResult> ProcessAsync(string content, ProcessingContext ctx, CancellationToken ct)
     {
         var injectionWarnings = new List<InjectionWarning>();
 
-        foreach (var (pattern, category, severity) in PatternMap)
+        foreach (var (regex, category, severity) in _instancePatterns)
         {
-            if (Regex.IsMatch(content, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline))
+            bool matched;
+            try
             {
-                injectionWarnings.Add(new InjectionWarning(category, pattern, severity));
+                matched = regex.IsMatch(content);
             }
+            catch (RegexMatchTimeoutException)
+            {
+                _logger.LogWarning(
+                    "InjectionPatternProcessor: regex timeout on pattern {Pattern} — treating as no match",
+                    regex.ToString());
+                matched = false; // timed out — treat as no match, do not block request
+            }
+
+            if (matched)
+                injectionWarnings.Add(new InjectionWarning(category, regex.ToString(), severity));
         }
 
         return Task.FromResult(new ProcessorResult(content, injectionWarnings));

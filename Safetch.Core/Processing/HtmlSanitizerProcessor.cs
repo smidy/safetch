@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
@@ -30,7 +31,7 @@ public class HtmlSanitizerProcessor : IContentProcessor
             }
         }
 
-        // 2. Remove data-* attributes from every node
+        // 2. Remove data-* and on* attributes from every node
         var allNodes = doc.DocumentNode.SelectNodes("//*");
         if (allNodes != null)
         {
@@ -39,7 +40,7 @@ public class HtmlSanitizerProcessor : IContentProcessor
                 var attributes = node.Attributes.ToList();
                 foreach (var attr in attributes)
                 {
-                    if (attr.Name.StartsWith("data-"))
+                    if (attr.Name.StartsWith("data-") || attr.Name.StartsWith("on"))
                     {
                         node.Attributes.Remove(attr);
                     }
@@ -64,6 +65,16 @@ public class HtmlSanitizerProcessor : IContentProcessor
             foreach (var meta in metaNodes.ToList())
             {
                 meta.Remove();
+            }
+        }
+
+        // 5. Remove <script> and <style> elements
+        var scriptStyleNodes = doc.DocumentNode.SelectNodes("//script|//style");
+        if (scriptStyleNodes != null)
+        {
+            foreach (var node in scriptStyleNodes.ToList())
+            {
+                node.Remove();
             }
         }
 
@@ -93,8 +104,7 @@ public class HtmlSanitizerProcessor : IContentProcessor
 
     private static bool IsInvisibleStyle(string normalizedStyle)
     {
-        // Check for substrings
-        var invisiblePatterns = new[]
+        var literalPatterns = new[]
         {
             "opacity:0",
             "display:none",
@@ -104,8 +114,68 @@ public class HtmlSanitizerProcessor : IContentProcessor
             "color:#ffffff",
             "width:0",
             "height:0",
-            "font-size:0"
+            "font-size:0",
         };
-        return invisiblePatterns.Any(pattern => normalizedStyle.Contains(pattern));
+        if (literalPatterns.Any(p => normalizedStyle.Contains(p)))
+            return true;
+
+        if (IsInvisibleColor(normalizedStyle))
+            return true;
+
+        if (IsOffScreen(normalizedStyle))
+            return true;
+
+        return false;
+    }
+
+    // Detects rgb(255,255,255) and rgba(...,0) colour values that NormalizeStyle
+    // may preserve with internal spaces (e.g. "color:rgba(255, 255, 255, 0)").
+    private static bool IsInvisibleColor(string normalizedStyle)
+    {
+        var colorIdx = normalizedStyle.IndexOf("color:", StringComparison.Ordinal);
+        // Ensure we matched the 'color' property, not 'background-color' or similar
+        while (colorIdx >= 0)
+        {
+            if (colorIdx == 0 || normalizedStyle[colorIdx - 1] == ';')
+                break;
+            colorIdx = normalizedStyle.IndexOf("color:", colorIdx + 1, StringComparison.Ordinal);
+        }
+        if (colorIdx < 0) return false;
+
+        var valueStart = colorIdx + 6;
+        var semiIdx = normalizedStyle.IndexOf(';', valueStart);
+        var colorValue = semiIdx >= 0
+            ? normalizedStyle.Substring(valueStart, semiIdx - valueStart)
+            : normalizedStyle.Substring(valueStart);
+
+        var compact = colorValue.Replace(" ", "");
+
+        if (compact == "rgb(255,255,255)") return true;
+
+        // CSS Color Level 4: space-separated rgb without commas, e.g. rgb(255 255 255)
+        if (compact == "rgb(255255255)") return true;
+
+        // CSS Color Level 3: rgba with zero alpha, comma-separated, e.g. rgba(255,0,0,0)
+        if (Regex.IsMatch(compact, @"^rgba\(\d+,\d+,\d+,0(?:\.0*)?\)$")) return true;
+
+        // CSS Color Level 4: space-separated with slash, e.g. rgba(255 0 0 / 0).
+        // After space removal the compact form is rgba(NNN/0) where NNN is the concatenation
+        // of the three channel values; we only need to verify the alpha (after '/') is zero.
+        if (Regex.IsMatch(compact, @"^rgba\(\d+/0(?:\.0*)?\)$")) return true;
+
+        return false;
+    }
+
+    // Detects position:absolute or position:fixed combined with a large negative
+    // left or top offset (100 units or more) — the classic "off-screen hiding" pattern.
+    private static bool IsOffScreen(string normalizedStyle)
+    {
+        if (!normalizedStyle.Contains("position:absolute") &&
+            !normalizedStyle.Contains("position:fixed"))
+            return false;
+
+        // Match "left:-NNNunit" or "top:-NNNunit" (3+ digit magnitude = ≥100 units off-screen)
+        // Covers px, em, rem, vh, vw — all units that can push content off-screen at this scale
+        return Regex.IsMatch(normalizedStyle, @"(?:^|;)(?:left|top):-\d{3,}(?:px|em|rem|vh|vw)");
     }
 }

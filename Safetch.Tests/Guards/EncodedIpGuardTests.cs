@@ -25,6 +25,20 @@ public class EncodedIpGuardTests
     }
 
     [Theory]
+    [InlineData("http://[fc00::1]")]            // ULA fc00::/7 private unicast
+    [InlineData("http://[fd00::1]")]            // ULA fd00::/7 private unicast (high half)
+    [InlineData("http://[::1]")]               // IPv6 loopback
+    [InlineData("http://[fe80::1]")]           // link-local fe80::/10
+    [InlineData("http://[::ffff:192.168.1.1]")] // IPv4-mapped private
+    [InlineData("http://[::ffff:127.0.0.1]")]  // IPv4-mapped loopback
+    public async Task CheckAsync_PrivateIpv6Literal_ReturnsBlock(string url)
+    {
+        var result = await _sut.CheckAsync(new FetchRequest { Url = url }, CancellationToken.None);
+        Assert.False(result.Allowed, $"Expected {url} to be blocked as a private IPv6 literal");
+        Assert.NotNull(result.Reason);
+    }
+
+    [Theory]
     [InlineData("http://1.1.1.1")]
     [InlineData("https://8.8.8.8")]
     [InlineData("http://93.184.216.34")]   // example.com

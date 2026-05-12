@@ -63,7 +63,8 @@ app.MapPost("/api/fetch", async (HttpContext ctx, IFetchService fetchService, IA
     var fetchRequest = new FetchRequest
     {
         Url = dto?.Url,
-        Mode = ParseMode(dto?.Mode)
+        Mode = ParseMode(dto?.Mode),
+        SpotlightingMode = ParseSpotlightingMode(dto?.SpotlightingMode)
     };
 
     if (string.IsNullOrWhiteSpace(fetchRequest.Url))
@@ -108,6 +109,7 @@ app.MapGet("/api/fetch", async (HttpContext ctx, IFetchService fetchService, IAp
     var url = query["url"].FirstOrDefault();
     var modeStr = query["mode"].FirstOrDefault();
     var identityKey = query["identityKey"].FirstOrDefault();
+    var spotlightingModeStr = query["spotlightingMode"].FirstOrDefault();
 
     if (string.IsNullOrWhiteSpace(url)
         || !Uri.TryCreate(url, UriKind.Absolute, out var parsedUri)
@@ -131,7 +133,8 @@ app.MapGet("/api/fetch", async (HttpContext ctx, IFetchService fetchService, IAp
     {
         Url = url,
         Mode = ParseMode(modeStr),
-        IdentityKey = identityKey
+        IdentityKey = identityKey,
+        SpotlightingMode = ParseSpotlightingMode(spotlightingModeStr)
     };
 
     FetchResponse fetchResponse;
@@ -171,4 +174,10 @@ static bool IsValidIdentityKey(string key)
     return true;
 }
 
-record FetchRequestDto(string? Url, string? Mode, string? IdentityKey);
+static SpotlightingMode ParseSpotlightingMode(string? mode) => mode?.ToLowerInvariant() switch
+{
+    "base64" => SpotlightingMode.Base64,
+    _ => SpotlightingMode.Delimiting
+};
+
+record FetchRequestDto(string? Url, string? Mode, string? IdentityKey, string? SpotlightingMode);
